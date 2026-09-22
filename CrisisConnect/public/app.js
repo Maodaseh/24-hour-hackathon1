@@ -783,20 +783,58 @@ function renderNearbyWaypoints() {
 }
 
 // =========================================================
-// 6. COMMUNITY FEED & OFFLINE QUEUE
+// 6. COMMUNITY FEED & OFFLINE QUEUE (REAL-TIME SYNC)
 // =========================================================
-async function fetchCommunityPosts() {
+
+// Cross-Tab & Multi-Window Real-Time Broadcast Channel
+const communityChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('crisis_community_sync') : null;
+
+if (communityChannel) {
+  communityChannel.onmessage = (event) => {
+    if (event.data && event.data.type === 'NEW_COMMUNITY_POST') {
+      const incoming = event.data.post;
+      if (incoming && !state.communityPosts.some(p => p.id === incoming.id)) {
+        state.communityPosts.unshift(incoming);
+        renderCommunityFeed();
+      }
+    }
+  };
+}
+
+async function fetchCommunityPosts(silent = false) {
   try {
     const res = await fetch('/api/community');
     if (res.ok) {
-      state.communityPosts = await res.json();
-      renderCommunityFeed();
+      const incoming = await res.json();
+      const prevIds = state.communityPosts.map(p => p.id).join(',');
+      const newIds = incoming.map(p => p.id).join(',');
+      state.communityPosts = incoming;
+      // Re-render if feed changed or on initial load
+      if (!silent || prevIds !== newIds) {
+        renderCommunityFeed();
+      }
     }
   } catch (err) {
-    console.warn('[App] Could not fetch community posts, displaying cached/queued posts');
-    renderCommunityFeed();
+    if (!silent) {
+      console.warn('[App] Could not fetch community posts, displaying cached/queued posts');
+      renderCommunityFeed();
+    }
   }
 }
+
+// Auto-refresh community feed every 2.5 seconds so all persons see incoming broadcasts live
+setInterval(() => {
+  if (navigator.onLine) {
+    fetchCommunityPosts(true);
+  }
+}, 2500);
+
+// Sync immediately when another tab on this machine submits a post
+window.addEventListener('storage', (e) => {
+  if (e.key === 'crisis_last_post_sync') {
+    fetchCommunityPosts(true);
+  }
+});
 
 function renderCommunityFeed() {
   const container = document.getElementById('communityFeedContainer');
@@ -820,12 +858,28 @@ function renderCommunityFeed() {
     return { ...post, distanceKm: distKm };
   });
 
-  // 2. Apply Geofenced Disaster Radius Filter
+  // 2. Apply Geofenced Disaster Radius & Same-Place Matching Filter
   const filteredPosts = processedPosts.filter(post => {
     // Always show user's own/pending posts
     if (post.isPending) return true;
     if (maxFeedRadius >= 9000) return true; // Global / All sectors mode
     if (post.distanceKm === null) return true; // Fallback if no GPS tag
+
+    // Same-Place Identification: If two persons are in the same sector (e.g. Perundurai), guaranteed match!
+    const mySector = (state.userSectorName || '').toLowerCase();
+    const postSector = (post.location || '').toLowerCase();
+    if (mySector && postSector) {
+      const keywords = ['perundurai', 'erode', 'tiruppur', 'coimbatore', 'chennimalai'];
+      for (const kw of keywords) {
+        if (mySector.includes(kw) && postSector.includes(kw)) {
+          return true; // Match persons from the same location
+        }
+      }
+      if (mySector.includes(postSector) || postSector.includes(mySector)) {
+        return true;
+      }
+    }
+
     // Filter within selected feed radius
     return post.distanceKm <= maxFeedRadius;
   });
@@ -869,11 +923,52 @@ function renderCommunityFeed() {
 
     const scopeText = post.radiusKm && post.radiusKm < 9000 ? `🎯 ${post.radiusKm}km Geofence` : '🌐 Regional Grid';
 
+    // Doctor & Volunteer Role Identification
+    const postRole = post.role || (post.author && post.author.toLowerCase().includes('dr') ? 'medic' : (post.author && post.author.toLowerCase().includes('volunteer') ? 'volunteer' : null));
+    let roleBadgeHtml = '';
+    if (postRole === 'medic') {
+      roleBadgeHtml = '<span class="user-role-badge medic" style="font-size:0.68rem; padding:2px 6px;">🩺 DOCTOR / MEDIC</span>';
+    } else if (postRole === 'volunteer') {
+      roleBadgeHtml = '<span class="user-role-badge volunteer" style="font-size:0.68rem; padding:2px 6px;">🚒 VOLUNTEER</span>';
+    }
+
+    // Direct Emergency Hotline Strip (Phone, Call, SMS, WhatsApp)
+    let hotlineHtml = '';
+    const postPhone = post.phone || (post.contact && post.contact.phone);
+    if (postPhone) {
+      const cleanPhone = String(postPhone).replace(/[^0-9+]/g, '');
+      const waPhone = cleanPhone.replace(/^\+/, '');
+      const isMedic = postRole === 'medic';
+      const roleTitle = isMedic ? '🏥 DOCTOR / MEDIC HOTLINE:' : '🚒 VOLUNTEER HOTLINE:';
+      const stripClass = isMedic ? 'verified-medic' : 'verified-volunteer';
+
+      hotlineHtml = `
+        <div class="responder-hotline-strip ${stripClass}">
+          <div class="hotline-info">
+            <span class="hotline-label">${roleTitle}</span>
+            <span class="hotline-phone">${escapeHtml(postPhone)}</span>
+          </div>
+          <div class="hotline-actions">
+            <a href="tel:${cleanPhone}" class="btn-hotline call" title="Call directly from mobile phone">
+              📞 Call Direct
+            </a>
+            <a href="sms:${cleanPhone}?&body=CRISISCONNECT%20SOS:%20Need%20immediate%20emergency%20assistance" class="btn-hotline sms" title="Send SMS message to responder">
+              💬 Direct SMS
+            </a>
+            <a href="https://wa.me/${waPhone}?text=CRISISCONNECT%20SOS:%20Need%20immediate%20emergency%20assistance" target="_blank" rel="noopener" class="btn-hotline whatsapp" title="Chat on WhatsApp">
+              🟢 WhatsApp
+            </a>
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <div class="post-card" id="post-${post.id}">
         <div class="post-top">
           <div class="post-author" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
             <span>👤 ${escapeHtml(post.author || 'Survivor')}</span>
+            ${roleBadgeHtml}
             ${post.isPending ? '<span style="font-size:0.7rem; background:#92400e; color:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:bold;">OFFLINE QUEUED</span>' : ''}
             ${isRelayed ? '<span class="mesh-badge relayed">MESH RELAYED</span>' : ''}
             ${isSms ? '<span class="mesh-badge sms">2G SMS</span>' : ''}
@@ -883,6 +978,7 @@ function renderCommunityFeed() {
           <span class="post-tag ${post.category || 'aid'}">${(post.category || 'AID').toUpperCase()}</span>
         </div>
         <div class="post-text">${escapeHtml(post.text)}</div>
+        ${hotlineHtml}
         <div class="post-footer">
           <span>📍 ${escapeHtml(post.location || 'Local Disaster Sector')}</span>
           <span>${new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -915,13 +1011,15 @@ function escapeHtml(str) {
 function formatPostEmergencyPayload(post) {
   const coords = post.coordinates ? `${post.coordinates.lat.toFixed(5)},${post.coordinates.lon.toFixed(5)}` : (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
   const rad = post.radiusKm || 15;
-  return `CC#${(post.category || 'AID').toUpperCase()}|CALL:${post.author || 'Survivor'}|GPS:${coords}|RAD:${rad}km|LOC:${post.location || 'Local'}|MSG:${post.text.replace(/[\r\n]+/g, ' ')}`;
+  const telStr = post.phone ? `|TEL:${post.phone}` : '';
+  return `CC#${(post.category || 'AID').toUpperCase()}|CALL:${post.author || 'Survivor'}${telStr}|GPS:${coords}|RAD:${rad}km|LOC:${post.location || 'Local'}|MSG:${post.text.replace(/[\r\n]+/g, ' ')}`;
 }
 
 function formatSmsText(post) {
   const coords = post.coordinates ? `${post.coordinates.lat.toFixed(5)},${post.coordinates.lon.toFixed(5)}` : (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
   const rad = post.radiusKm || 15;
-  return `CRISISCONNECT EMERGENCY RELAY\nCAT: ${(post.category || 'AID').toUpperCase()}\nFROM: ${post.author || 'Survivor'}\nGPS: ${coords}\nGEOFENCE: ${rad} km\nLOC: ${post.location || 'Local'}\nMSG: ${post.text}`;
+  const phoneLine = post.phone ? `\nHOTLINE / CALL: ${post.phone}` : '';
+  return `CRISISCONNECT EMERGENCY RELAY\nCAT: ${(post.category || 'AID').toUpperCase()}\nFROM: ${post.author || 'Survivor'}${phoneLine}\nGPS: ${coords}\nGEOFENCE: ${rad} km\nLOC: ${post.location || 'Local'}\nMSG: ${post.text}`;
 }
 
 // Find post by ID from state
@@ -1086,9 +1184,17 @@ if (communityForm) {
 
     const coords = state.userLocation ? { lat: state.userLocation.lat, lon: state.userLocation.lon } : null;
 
+    const phoneInputElem = document.getElementById('phoneInput');
+    const composerPhoneVal = phoneInputElem ? phoneInputElem.value.trim() : '';
+    const currentUser = (typeof CrisisAuth !== 'undefined') ? CrisisAuth.currentUser : null;
+    const authorRole = currentUser ? currentUser.role : null;
+    const authorPhone = composerPhoneVal || (currentUser ? currentUser.phone : null);
+
     const postPayload = {
       id: Date.now(),
       author,
+      role: authorRole,
+      phone: authorPhone,
       location,
       category,
       text,
@@ -1114,6 +1220,10 @@ if (communityForm) {
           const created = await res.json();
           state.communityPosts.unshift(created);
           renderCommunityFeed();
+          if (communityChannel) {
+            communityChannel.postMessage({ type: 'NEW_COMMUNITY_POST', post: created });
+          }
+          localStorage.setItem('crisis_last_post_sync', Date.now().toString());
           communityForm.reset();
           restoreComposerAuthor();
           return;
@@ -1145,6 +1255,10 @@ function restoreComposerAuthor() {
     const roleUpper = (CrisisAuth.currentUser.role || 'SURVIVOR').toUpperCase();
     const input = document.getElementById('authorInput');
     if (input) input.value = `${CrisisAuth.currentUser.displayName} (${roleUpper})`;
+    const phoneIn = document.getElementById('phoneInput');
+    if (phoneIn && CrisisAuth.currentUser.phone && !phoneIn.value) {
+      phoneIn.value = CrisisAuth.currentUser.phone;
+    }
   }
   const locInput = document.getElementById('locationInput');
   if (locInput && state.userSectorName) {
@@ -1162,6 +1276,9 @@ function restoreComposerAuthor() {
       const text = document.getElementById('textInput').value.trim();
       const radiusElem = document.getElementById('broadcastRadiusSelect');
       const radiusKm = radiusElem ? parseFloat(radiusElem.value) : 15;
+      const phoneInputElem = document.getElementById('phoneInput');
+      const composerPhone = phoneInputElem ? phoneInputElem.value.trim() : '';
+      const authorPhone = composerPhone || (typeof CrisisAuth !== 'undefined' && CrisisAuth.currentUser ? CrisisAuth.currentUser.phone : null);
 
       if (!text) {
         alert('Please enter report details first.');
@@ -1172,6 +1289,7 @@ function restoreComposerAuthor() {
       const tempPost = {
         id: Date.now(),
         author,
+        phone: authorPhone,
         location,
         category,
         text,
@@ -1194,6 +1312,9 @@ function restoreComposerAuthor() {
       const text = document.getElementById('textInput').value.trim();
       const radiusElem = document.getElementById('broadcastRadiusSelect');
       const radiusKm = radiusElem ? parseFloat(radiusElem.value) : 15;
+      const phoneInputElem = document.getElementById('phoneInput');
+      const composerPhone = phoneInputElem ? phoneInputElem.value.trim() : '';
+      const authorPhone = composerPhone || (typeof CrisisAuth !== 'undefined' && CrisisAuth.currentUser ? CrisisAuth.currentUser.phone : null);
 
       if (!text) {
         alert('Please enter report details first.');
@@ -1205,6 +1326,7 @@ function restoreComposerAuthor() {
       const post = {
         id: Date.now(),
         author,
+        phone: authorPhone,
         location,
         category,
         text,
@@ -1325,10 +1447,13 @@ async function flushPendingCommunityPosts() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           author: post.author,
+          role: post.role,
+          phone: post.phone,
           location: post.location,
           category: post.category,
           text: post.text,
           coordinates: post.coordinates,
+          radiusKm: post.radiusKm,
           source: post.source || 'queued_offline',
           relayed: post.relayed
         })
@@ -1487,8 +1612,30 @@ function initAuthUI() {
     });
   }
 
+  // Universal Modal Closer: supports all modals, backdrop click, top close X button, and Escape key
+  window.closeAllModals = function() {
+    document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+  };
+
+  // Click outside modal content (on the overlay backdrop) to close
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.classList.remove('active');
+      }
+    });
+  });
+
+  // Escape key closes any open modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      window.closeAllModals();
+    }
+  });
+
   const authModal = document.getElementById('authModal');
   const btnCloseAuth = document.getElementById('btnCloseAuthModal');
+  const btnCloseAuthTop = document.getElementById('btnCloseAuthModalTop');
   const tabSignIn = document.getElementById('tabAuthSignIn');
   const tabSignUp = document.getElementById('tabAuthSignUp');
   const signInForm = document.getElementById('signInForm');
@@ -1509,6 +1656,11 @@ function initAuthUI() {
 
   if (btnCloseAuth && authModal) {
     btnCloseAuth.addEventListener('click', () => {
+      authModal.classList.remove('active');
+    });
+  }
+  if (btnCloseAuthTop && authModal) {
+    btnCloseAuthTop.addEventListener('click', () => {
       authModal.classList.remove('active');
     });
   }
@@ -1551,6 +1703,31 @@ function initAuthUI() {
     });
   }
 
+  // Dynamic Emergency Role Hint & Phone Field Highlighting
+  const roleRadios = document.querySelectorAll('input[name="emergencyRole"]');
+  const phoneFieldGroup = document.getElementById('phoneFieldGroup');
+  const phoneLabel = document.getElementById('phoneFieldLabel');
+  const phoneHint = document.getElementById('phoneFieldHint');
+
+  roleRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      const selectedRole = radio.value;
+      if (selectedRole === 'medic') {
+        if (phoneLabel) phoneLabel.innerHTML = 'Direct Emergency Mobile Number <span style="color:#ef4444; font-weight:bold;">* (Required for Doctors)</span>';
+        if (phoneHint) phoneHint.textContent = 'Trapped survivors will see this hotline and can directly Call, SMS, or WhatsApp you for medical aid.';
+        if (phoneFieldGroup) phoneFieldGroup.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+      } else if (selectedRole === 'volunteer') {
+        if (phoneLabel) phoneLabel.innerHTML = 'Direct Emergency Mobile Number <span style="color:#f59e0b; font-weight:bold;">* (Required for Volunteers)</span>';
+        if (phoneHint) phoneHint.textContent = 'Survivors in disaster zones can 1-tap Call or SMS you directly for rescue coordination.';
+        if (phoneFieldGroup) phoneFieldGroup.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+      } else {
+        if (phoneLabel) phoneLabel.textContent = 'Emergency Mobile Number (Optional for Survivors)';
+        if (phoneHint) phoneHint.textContent = 'Optional contact number for emergency responders to call you back.';
+        if (phoneFieldGroup) phoneFieldGroup.style.borderColor = '';
+      }
+    });
+  });
+
   // Handle Sign Up Form
   if (signUpForm) {
     signUpForm.addEventListener('submit', async (e) => {
@@ -1558,13 +1735,27 @@ function initAuthUI() {
       const name = document.getElementById('signUpName').value.trim();
       const email = document.getElementById('signUpEmail').value.trim();
       const pass = document.getElementById('signUpPassword').value;
+      const phoneInput = document.getElementById('signUpPhone');
+      let phone = phoneInput ? phoneInput.value.trim() : '';
       const roleElem = document.querySelector('input[name="emergencyRole"]:checked');
       const role = roleElem ? roleElem.value : 'survivor';
 
       if (!name || !email || !pass) return;
 
+      // Require phone number for Medic and Volunteer roles so survivors can direct-contact them
+      if ((role === 'medic' || role === 'volunteer') && !phone) {
+        showAuthAlert(`Please enter your mobile phone number. Survivors in emergency zones need this to call or SMS you directly for ${role === 'medic' ? 'medical aid' : 'rescue'}.`, 'error');
+        if (phoneInput) phoneInput.focus();
+        return;
+      }
+
+      // Format phone with +91 if purely local 10 digits
+      if (phone && !phone.startsWith('+')) {
+        phone = '+91 ' + phone;
+      }
+
       try {
-        const res = await CrisisAuth.signUp(email, pass, name, role);
+        const res = await CrisisAuth.signUp(email, pass, name, role, phone);
         if (res.success) {
           if (authModal) authModal.classList.remove('active');
           signUpForm.reset();
@@ -1602,9 +1793,11 @@ function renderUserHeader(user) {
 
   if (user) {
     const roleUpper = (user.role || 'SURVIVOR').toUpperCase();
+    const phoneDisplay = user.phone ? `<span style="font-size:0.75rem; color:#94a3b8; margin-left:4px; font-weight:500;">📞 ${escapeHtml(user.phone)}</span>` : '';
     container.innerHTML = `
       <div class="user-profile-chip">
         <span class="user-callsign">👤 ${escapeHtml(user.displayName || user.email.split('@')[0])}</span>
+        ${phoneDisplay}
         <span class="user-role-badge ${user.role || 'survivor'}">${roleUpper}</span>
         <button class="btn-logout" id="btnLogout" title="Sign Out">⎋</button>
       </div>

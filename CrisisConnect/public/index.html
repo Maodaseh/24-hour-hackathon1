@@ -11,7 +11,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* Critical render fallback: hide modal overlays before stylesheet loads */
+    .modal-overlay:not(.active) { display: none !important; }
+  </style>
   <!-- Leaflet CSS for Vector & Satellite Maps -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <!-- Leaflet JS -->
@@ -232,6 +236,16 @@
                 <option value="water">Drinking Water & Food</option>
               </select>
             </div>
+            <div class="form-group" id="composerPhoneGroup">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label class="form-label" for="phoneInput" style="margin:0; font-weight:600;">Direct Hotline / Contact Phone (Optional)</label>
+                <span style="font-size:0.68rem; font-family:var(--font-mono); color:#38bdf8;">📞 1-Tap Call & SMS for Survivors</span>
+              </div>
+              <input type="tel" id="phoneInput" class="form-input" placeholder="e.g. +91 94432 11099 (Survivors can call or SMS you directly)">
+              <span style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:4px;">
+                Adding your mobile number displays 1-tap 📞 Call, 💬 SMS, and 🟢 WhatsApp buttons on your report.
+              </span>
+            </div>
             <div class="form-group">
               <label class="form-label" for="textInput">Report Details</label>
               <textarea id="textInput" class="form-textarea" placeholder="Describe the current situation, accessible routes, or assistance needed..." required></textarea>
@@ -287,6 +301,7 @@
        ======================================================= -->
   <div class="modal-overlay" id="sosModal">
     <div class="modal-box">
+      <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
       <h2 class="modal-title">🚨 EMERGENCY ASSISTANCE</h2>
       <p style="font-size:0.9rem; color:#cbd5e1; margin-bottom:12px;">
         Immediate dispatch lines. Cellular voice and SMS work over degraded 2G GSM bands even when data fails.
@@ -323,6 +338,7 @@
        ======================================================= -->
   <div class="modal-overlay" id="smsModal">
     <div class="modal-box">
+      <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
       <h2 class="modal-title" style="color:var(--color-warning);">📡 2G CELLULAR SMS RELAY</h2>
       <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
         Cellular SMS travels over 2G voice signaling channels (SS7) and transmits even when mobile data is completely <strong>0 KB/s</strong>.
@@ -357,6 +373,7 @@
        ======================================================= -->
   <div class="modal-overlay" id="qrRelayModal">
     <div class="modal-box" style="text-align:center; max-width:440px;">
+      <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
       <h2 class="modal-title" style="color:#38bdf8;">📲 OFFLINE QR SNEAKERNET RELAY</h2>
       <p style="font-size:0.82rem; color:#cbd5e1; margin-bottom:12px;">
         Zero-RF visual mesh handoff. Passing volunteers or rescue runners can scan this QR code with their camera to carry and relay your distress report.
@@ -387,6 +404,7 @@
        ======================================================= -->
   <div class="modal-overlay" id="ingestModal">
     <div class="modal-box">
+      <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
       <h2 class="modal-title" style="color:#10b981;">📥 INGEST FIELD REPORT</h2>
       <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
         Paste a survivor's distress packet (from QR scan or SMS). CrisisConnect will ingest it into your device and auto-upload it to the cloud grid once you reach network coverage.
@@ -413,6 +431,7 @@
        ======================================================= -->
   <div class="modal-overlay" id="authModal">
     <div class="modal-box" style="max-width:440px;">
+      <button type="button" class="modal-close-icon" id="btnCloseAuthModalTop" onclick="window.closeAllModals()" title="Close">&times;</button>
       <h2 class="modal-title" style="color:#38bdf8; font-size:1.25rem;">
         <span>🔐 EMERGENCY CLOUD ACCESS</span>
       </h2>
@@ -474,6 +493,23 @@
             </label>
           </div>
         </div>
+
+        <!-- Dedicated Emergency Phone Field with High-Visibility Container -->
+        <div class="form-group" id="phoneFieldGroup" style="background:rgba(30,58,138,0.25); border:1.5px solid rgba(56,189,248,0.45); border-radius:8px; padding:12px; margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label class="form-label" for="signUpPhone" id="phoneFieldLabel" style="margin:0; font-weight:700; color:#38bdf8; font-size:0.85rem;">
+              📞 Direct Emergency Mobile Number
+            </label>
+            <span id="phoneNoticeBadge" style="font-size:0.68rem; font-family:var(--font-mono); color:#f59e0b; background:rgba(245,158,11,0.18); padding:2px 7px; border-radius:4px; border:1px solid rgba(245,158,11,0.4); font-weight:600;">
+              ⚠️ Visible to Survivors
+            </span>
+          </div>
+          <input type="tel" id="signUpPhone" class="form-input" placeholder="e.g. +91 94432 11099 (Hotline for survivors)" style="border-color:rgba(56,189,248,0.5); font-size:0.95rem; background:rgba(15,23,42,0.9);">
+          <span id="phoneFieldHint" style="font-size:0.72rem; color:#94a3b8; display:block; margin-top:5px; line-height:1.35;">
+            Survivors in disaster zones will see 1-tap 📞 Call, 💬 SMS, and 🟢 WhatsApp buttons to reach you.
+          </span>
+        </div>
+
         <div class="form-group">
           <label class="form-label" for="signUpEmail">Email Address</label>
           <input type="email" id="signUpEmail" class="form-input" placeholder="name@domain.com" required>
@@ -495,7 +531,7 @@
         ⚡ 1-Tap Anonymous Crisis Access (No Password)
       </button>
 
-      <button type="button" class="btn-close-modal" id="btnCloseAuthModal" style="margin-top:12px;">
+      <button type="button" class="btn-close-modal" id="btnCloseAuthModal" onclick="window.closeAllModals()" style="margin-top:12px;">
         DISMISS
       </button>
     </div>
@@ -505,10 +541,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
+  <script src="/firebase-config.js"></script>
 
   <!-- Offline QR Engine & Client-Side App Logic -->
-  <script src="qrcode.bundle.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="/qrcode.bundle.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

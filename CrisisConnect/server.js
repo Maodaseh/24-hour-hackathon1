@@ -34,10 +34,12 @@ app.use(express.json());
 let communityPosts = [
   { 
     id: 1, 
-    author: 'Rescue_Team_Alpha', 
-    text: 'Evacuation buses staging at Perundurai Govt Boys Higher Secondary School. Medical supplies and clean drinking water available.', 
+    author: 'Rescue_Team_Alpha (Dr. Ramesh)', 
+    text: 'Evacuation buses and emergency medical triage staging at Perundurai Govt Higher Secondary School. Clean drinking water and trauma kits available.', 
     location: 'Perundurai Town Center (Bypass Rd)',
     category: 'aid',
+    role: 'medic',
+    phone: '+91 94432 11099',
     coordinates: { lat: 11.2750, lon: 77.5835 },
     radiusKm: 15,
     timestamp: new Date(Date.now() - 25 * 60000).toISOString() 
@@ -48,16 +50,19 @@ let communityPosts = [
     text: 'Warning: Water stagnation near Chennimalai Road underpass is impassable due to rising flash flood waters. Use Old Ring Road.', 
     location: 'Chennimalai Rd & 4-Roads Junction',
     category: 'hazard',
+    role: 'survivor',
     coordinates: { lat: 11.2780, lon: 77.5890 },
     radiusKm: 15,
     timestamp: new Date(Date.now() - 12 * 60000).toISOString() 
   },
   { 
     id: 3, 
-    author: 'RedCross_Logistics', 
-    text: 'Mobile emergency oxygen and water purification unit operational at Perundurai Bus Stand Shelter.', 
+    author: 'RedCross_Logistics (Suresh)', 
+    text: 'Mobile emergency oxygen cylinders and water purification unit operational at Perundurai Bus Stand Shelter. Call our dispatch if you need pickup.', 
     location: 'Perundurai Central Terminal',
     category: 'water',
+    role: 'volunteer',
+    phone: '+91 98427 55432',
     coordinates: { lat: 11.2720, lon: 77.5810 },
     radiusKm: 25,
     timestamp: new Date(Date.now() - 5 * 60000).toISOString() 
@@ -249,7 +254,7 @@ app.get('/api/community', (req, res) => {
 });
 
 app.post('/api/community', (req, res) => {
-  const { author, text, location, category, source, relayed, coordinates, radiusKm } = req.body;
+  const { author, text, location, category, source, relayed, coordinates, radiusKm, phone, role } = req.body;
   if (text && text.trim()) {
     const newPost = {
       id: Date.now(),
@@ -257,6 +262,8 @@ app.post('/api/community', (req, res) => {
       text: text.trim(),
       location: (location && location.trim()) ? location.trim() : 'Perundurai Sector',
       category: category || 'aid',
+      role: role || 'survivor',
+      phone: (phone && phone.trim()) ? phone.trim() : null,
       coordinates: coordinates || null,
       radiusKm: radiusKm ? parseFloat(radiusKm) : 15,
       source: source || 'direct',
@@ -296,6 +303,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`CrisisConnect PWA server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`CrisisConnect PWA server running on port ${PORT}`);
 });

@@ -85,7 +85,7 @@ const CrisisAuth = {
     });
   },
 
-  async signUp(email, password, displayName, role = 'survivor') {
+  async signUp(email, password, displayName, role = 'survivor', phone = '') {
     // Live Firebase Auth attempt
     if (this.auth) {
       try {
@@ -97,10 +97,11 @@ const CrisisAuth = {
           email,
           displayName,
           role,
+          phone: phone || '',
           createdAt: new Date().toISOString()
         };
 
-        // Save role in Firestore
+        // Save role and phone in Firestore
         if (this.db) {
           await this.db.collection('users').doc(cred.user.uid).set(profile, { merge: true });
         }
@@ -120,6 +121,7 @@ const CrisisAuth = {
       email,
       displayName: displayName || email.split('@')[0],
       role: role || 'survivor',
+      phone: phone || '',
       createdAt: new Date().toISOString()
     };
     localStorage.setItem('crisis_current_user', JSON.stringify(profile));
@@ -147,7 +149,8 @@ const CrisisAuth = {
           uid: cred.user.uid,
           email: cred.user.email,
           displayName: cred.user.displayName || profile.displayName || email.split('@')[0],
-          role: profile.role || 'survivor'
+          role: profile.role || 'survivor',
+          phone: profile.phone || ''
         };
         localStorage.setItem('crisis_current_user', JSON.stringify(user));
         this.currentUser = user;
@@ -172,7 +175,8 @@ const CrisisAuth = {
       uid: 'user_' + Date.now(),
       email,
       displayName: email.split('@')[0],
-      role: 'survivor'
+      role: 'survivor',
+      phone: ''
     };
     localStorage.setItem('crisis_current_user', JSON.stringify(fallbackUser));
     this.currentUser = fallbackUser;

@@ -1,5 +1,5 @@
-// CrisisConnect Service Worker: Offline-First Crisis Grid
-const CACHE_NAME = 'crisisconnect-v11';
+// CrisisConnect Service Worker: Clean, Resilient Offline Engine
+const CACHE_NAME = 'crisisconnect-v15';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,32 +8,33 @@ const STATIC_ASSETS = [
   '/firebase-config.js',
   '/qrcode.bundle.js',
   '/manifest.json',
-  '/icon.svg',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  '/icon.svg'
 ];
 
-// 1. Install: Pre-cache core shell & skip waiting immediately
+// 1. Install: Pre-cache local files safely
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Pre-caching offline emergency shell v6');
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[ServiceWorker] Error pre-caching some assets:', err);
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      console.log('[SW] Pre-caching static assets');
+      for (const asset of STATIC_ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (e) {
+          console.warn('[SW] Pre-cache skipped asset:', asset);
+        }
+      }
     })
   );
 });
 
-// 2. Activate: Purge ALL obsolete caches immediately & claim clients
+// 2. Activate: Clear old caches and take control
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('[ServiceWorker] Purging old cache:', key);
             return caches.delete(key);
           }
         })
@@ -42,114 +43,104 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Strategy
+// 3. Fetch: Strict MIME-type isolation so CSS/JS never receive HTML
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // A. API Requests: Stale-While-Revalidate with offline fallback
+  // A. API Requests
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const cachedResponse = await cache.match(event.request);
-        const fetchPromise = fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch(async () => {
-            if (!cachedResponse) {
-              if (url.pathname.includes('/api/disasters')) {
-                return new Response(JSON.stringify([
-                  {
-                    id: 'offline-alert',
-                    title: 'OFFLINE MODE: Cellular Grid Unavailable',
-                    description: 'Showing cached local disaster advisory. Stay sheltered in place until connection restores.',
-                    severity: 'Red',
-                    pubDate: new Date().toISOString()
-                  }
-                ]), { headers: { 'Content-Type': 'application/json' } });
-              }
-              if (url.pathname.includes('/api/community')) {
-                return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
-              }
-            }
-            return cachedResponse;
-          });
-
-        return cachedResponse || fetchPromise;
+        try {
+          const networkRes = await fetch(event.request);
+          if (networkRes && networkRes.ok) {
+            cache.put(event.request, networkRes.clone());
+          }
+          return networkRes;
+        } catch (err) {
+          const cached = await cache.match(event.request);
+          if (cached) return cached;
+          return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
+        }
       })
     );
     return;
   }
 
-  // B. HTML Navigation, Scripts & Styles: Network-First (Fresh updates, Cache fallback for offline)
-  if (
-    event.request.mode === 'navigate' ||
-    url.pathname === '/' ||
-    url.pathname.endsWith('.html') ||
-    url.pathname.endsWith('.js') ||
-    url.pathname.endsWith('.css')
-  ) {
+  // B. CSS Stylesheets: STRICT text/css response only
+  if (url.pathname.endsWith('.css')) {
     event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const copy = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+      caches.match(url.pathname).then(async (cached) => {
+        if (cached) return cached;
+        try {
+          const networkRes = await fetch(event.request);
+          if (networkRes && networkRes.ok) {
+            const copy = networkRes.clone();
+            caches.open(CACHE_NAME).then(c => c.put(url.pathname, copy));
           }
-          return networkResponse;
-        })
-        .catch(async () => {
-          console.log('[ServiceWorker] Network failed, serving cached shell for:', url.pathname);
-          const cached = await caches.match(event.request);
-          if (cached) return cached;
-          return caches.match('/index.html');
-        })
+          return networkRes;
+        } catch (err) {
+          return new Response('/* Offline CSS Fallback */', { headers: { 'Content-Type': 'text/css' } });
+        }
+      })
     );
     return;
   }
 
-  // C. Map Tiles & External Assets: Cache-First
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          (event.request.url.includes('arcgisonline.com') ||
-           event.request.url.includes('tile.openstreetmap.org') ||
-           event.request.url.includes('unpkg.com'))
-        ) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+  // C. JavaScript Scripts: STRICT application/javascript response only
+  if (url.pathname.endsWith('.js')) {
+    event.respondWith(
+      caches.match(url.pathname).then(async (cached) => {
+        if (cached) return cached;
+        try {
+          const networkRes = await fetch(event.request);
+          if (networkRes && networkRes.ok) {
+            const copy = networkRes.clone();
+            caches.open(CACHE_NAME).then(c => c.put(url.pathname, copy));
+          }
+          return networkRes;
+        } catch (err) {
+          return new Response('console.warn("Offline script fallback");', { headers: { 'Content-Type': 'application/javascript' } });
         }
-        return networkResponse;
-      }).catch(() => {
-        // Return null or empty response if tile fails offline
-        return null;
-      });
+      })
+    );
+    return;
+  }
+
+  // D. HTML Document Navigation
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request).then((networkRes) => {
+        if (networkRes && networkRes.ok) {
+          const copy = networkRes.clone();
+          caches.open(CACHE_NAME).then(c => c.put('/index.html', copy));
+        }
+        return networkRes;
+      }).catch(async () => {
+        const cached = await caches.match('/index.html') || await caches.match('/');
+        if (cached) return cached;
+        return new Response('<!DOCTYPE html><html><body><h2>CrisisConnect Offline</h2><p>Please check your connection.</p></body></html>', {
+          headers: { 'Content-Type': 'text/html' }
+        });
+      })
+    );
+    return;
+  }
+
+  // E. Images, Icons, Fonts, Maps
+  event.respondWith(
+    caches.match(event.request).then(async (cached) => {
+      if (cached) return cached;
+      try {
+        const networkRes = await fetch(event.request);
+        if (networkRes && networkRes.ok) {
+          const copy = networkRes.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, copy));
+        }
+        return networkRes;
+      } catch (err) {
+        return new Response('', { status: 204 });
+      }
     })
   );
 });
-
-// 4. Background Sync: Auto-sync queued offline community broadcasts
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-community-posts') {
-    event.waitUntil(syncOfflineCommunityPosts());
-  }
-});
-
-async function syncOfflineCommunityPosts() {
-  console.log('[ServiceWorker] Background sync triggered: uploading queued messages');
-  const allClients = await self.clients.matchAll({ includeUncontrolled: true });
-  allClients.forEach((client) => {
-    client.postMessage({ type: 'TRIGGER_SYNC_QUEUE' });
-  });
-}
