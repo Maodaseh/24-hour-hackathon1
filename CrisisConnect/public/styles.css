@@ -406,6 +406,10 @@ body.mode-survivor-2g .rich-media-only {
 
 body.mode-survivor-2g .low-mode-summary {
   display: block !important;
+  background: #fffbeb !important;
+  border: 1px solid #fde68a !important;
+  border-left: 4px solid #f59e0b !important;
+  color: #1e293b !important;
 }
 
 body.mode-survivor-2g .high-mode-rich {

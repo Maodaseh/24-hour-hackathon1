@@ -806,7 +806,7 @@ function renderMapShelterMarkers() {
           </button>
           <div style="display:flex; gap:6px;">
             <button onclick="window.selectNavTarget('${sh.id}')" style="flex:1;padding:5px;background:#0284c7;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:11px;">Direct Radar</button>
-            <a href="${gmapsUrl}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;padding:5px;background:#1e293b;color:#38bdf8;text-decoration:none;border-radius:4px;font-weight:bold;font-size:11px;">Google Maps ↗</a>
+            <a href="${gmapsUrl}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;padding:5px;background:#f8fafc;color:#0284c7;border:1px solid #cbd5e1;text-decoration:none;border-radius:4px;font-weight:bold;font-size:11px;">Google Maps ↗</a>
           </div>
         </div>
       `);
@@ -873,11 +873,11 @@ function renderDisasterAlerts() {
     `;
 
     const lowDesc = `
-      <div class="low-mode-summary" style="background:#0f0f0f; border-left:3px solid var(--color-warning); padding:8px 10px; margin:8px 0; font-size:0.85rem; font-family:var(--font-mono);">
-        <strong style="color:var(--color-warning);">⚠ 3-POINT CRISIS ACTION:</strong><br>
-        1. Avoid low-lying river roads and flooded bridges.<br>
-        2. Keep phone in battery-saver mode.<br>
-        3. Nearest verified triage point: ${state.shelters[0] ? state.shelters[0].name : 'Government Hospital'}.
+      <div class="low-mode-summary" style="background:#fffbeb; border:1px solid #fde68a; border-left:4px solid #f59e0b; border-radius:6px; padding:10px 14px; margin:10px 0; font-size:0.85rem; font-family:var(--font-mono); color:#1e293b; line-height:1.6;">
+        <strong style="color:#b45309; display:block; margin-bottom:4px; font-weight:800;">⚠ 3-POINT CRISIS ACTION:</strong>
+        <div style="color:#334155; margin-bottom:2px;">1. Avoid low-lying river roads and flooded bridges.</div>
+        <div style="color:#334155; margin-bottom:2px;">2. Keep phone in battery-saver mode.</div>
+        <div style="color:#334155;">3. Nearest verified triage point: <strong style="color:#0f172a;">${state.shelters[0] ? state.shelters[0].name : 'Government Hospital'}</strong>.</div>
       </div>
     `;
 
@@ -994,10 +994,10 @@ function renderSheltersList() {
   }).sort((a, b) => a.distance - b.distance);
 
   const imgGradients = [
-    'linear-gradient(135deg, #1e3a8a, #0f172a)',
-    'linear-gradient(135deg, #065f46, #064e3b)',
-    'linear-gradient(135deg, #701a75, #4a044e)',
-    'linear-gradient(135deg, #7c2d12, #431407)'
+    'linear-gradient(135deg, #2563eb, #1d4ed8)',
+    'linear-gradient(135deg, #059669, #047857)',
+    'linear-gradient(135deg, #7c3aed, #6d28d9)',
+    'linear-gradient(135deg, #d97706, #b45309)'
   ];
 
   container.innerHTML = sortedShelters.map((sh, idx) => {
