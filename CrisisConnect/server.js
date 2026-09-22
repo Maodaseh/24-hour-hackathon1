@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const Parser = require('rss-parser');
+const QRCode = require('qrcode');
 
 // Load .env configuration
 try {
@@ -242,7 +243,7 @@ app.get('/api/community', (req, res) => {
 });
 
 app.post('/api/community', (req, res) => {
-  const { author, text, location, category } = req.body;
+  const { author, text, location, category, source, relayed, coordinates } = req.body;
   if (text && text.trim()) {
     const newPost = {
       id: Date.now(),
@@ -250,6 +251,9 @@ app.post('/api/community', (req, res) => {
       text: text.trim(),
       location: (location && location.trim()) ? location.trim() : 'Local Area',
       category: category || 'aid',
+      coordinates: coordinates || null,
+      source: source || 'direct',
+      relayed: !!relayed,
       timestamp: new Date().toISOString()
     };
     communityPosts.unshift(newPost);
@@ -258,6 +262,25 @@ app.post('/api/community', (req, res) => {
     res.status(201).json(newPost);
   } else {
     res.status(400).json({ error: 'Text message is required' });
+  }
+});
+
+// 4. API Endpoint: Emergency QR Generator
+app.get('/api/qr', async (req, res) => {
+  const text = req.query.text;
+  if (!text) return res.status(400).json({ error: 'Missing text parameter' });
+  try {
+    const dataUrl = await QRCode.toDataURL(text, {
+      margin: 2,
+      width: 320,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    });
+    res.json({ dataUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -1,10 +1,11 @@
 // CrisisConnect Service Worker: Offline-First Crisis Grid
-const CACHE_NAME = 'crisisconnect-v8';
+const CACHE_NAME = 'crisisconnect-v9';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
   '/app.js',
+  '/qrcode.bundle.js',
   '/manifest.json',
   '/icon.svg',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',

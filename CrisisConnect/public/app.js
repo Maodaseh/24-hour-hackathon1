@@ -758,22 +758,36 @@ function renderCommunityFeed() {
     return;
   }
 
-  container.innerHTML = allPosts.map(post => `
-    <div class="post-card">
-      <div class="post-top">
-        <div class="post-author">
-          <span>👤 ${post.author}</span>
-          ${post.isPending ? '<span style="font-size:0.7rem; background:#92400e; color:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:bold;">OFFLINE QUEUED</span>' : ''}
+  container.innerHTML = allPosts.map(post => {
+    const isRelayed = post.relayed || post.source === 'mesh_qr';
+    const isSms = post.source === 'sms_relay';
+    return `
+      <div class="post-card" id="post-${post.id}">
+        <div class="post-top">
+          <div class="post-author" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <span>👤 ${escapeHtml(post.author || 'Survivor')}</span>
+            ${post.isPending ? '<span style="font-size:0.7rem; background:#92400e; color:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:bold;">OFFLINE QUEUED</span>' : ''}
+            ${isRelayed ? '<span class="mesh-badge relayed">MESH RELAYED</span>' : ''}
+            ${isSms ? '<span class="mesh-badge sms">2G SMS</span>' : ''}
+          </div>
+          <span class="post-tag ${post.category || 'aid'}">${(post.category || 'AID').toUpperCase()}</span>
         </div>
-        <span class="post-tag ${post.category || 'aid'}">${(post.category || 'AID').toUpperCase()}</span>
+        <div class="post-text">${escapeHtml(post.text)}</div>
+        <div class="post-footer">
+          <span>📍 ${escapeHtml(post.location || 'Unknown')}</span>
+          <span>${new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+        <div class="post-action-row">
+          <button type="button" class="btn-card-relay sms" onclick="window.relayPostViaSms('${post.id}')" title="Forward via 2G Cellular SMS">
+            📡 2G SMS Relay
+          </button>
+          <button type="button" class="btn-card-relay qr" onclick="window.showPostQr('${post.id}')" title="Show QR code for physical sneakernet handoff">
+            📲 Show QR Relay
+          </button>
+        </div>
       </div>
-      <div class="post-text">${escapeHtml(post.text)}</div>
-      <div class="post-footer">
-        <span>📍 ${escapeHtml(post.location || 'Unknown')}</span>
-        <span>${new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function escapeHtml(str) {
@@ -787,7 +801,164 @@ function escapeHtml(str) {
   }[m]));
 }
 
-// Submit Field Report
+// Format compact packet string for QR mesh and SMS
+function formatPostEmergencyPayload(post) {
+  const coords = post.coordinates || (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
+  return `CC#${(post.category || 'AID').toUpperCase()}|CALL:${post.author || 'Survivor'}|GPS:${coords}|LOC:${post.location || 'Local'}|MSG:${post.text.replace(/[\r\n]+/g, ' ')}`;
+}
+
+function formatSmsText(post) {
+  const coords = post.coordinates || (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
+  return `CRISISCONNECT EMERGENCY RELAY\nCAT: ${(post.category || 'AID').toUpperCase()}\nFROM: ${post.author || 'Survivor'}\nGPS: ${coords}\nLOC: ${post.location || 'Local'}\nMSG: ${post.text}`;
+}
+
+// Find post by ID from state
+function findPostById(id) {
+  const allPosts = [...state.pendingPosts, ...state.communityPosts];
+  return allPosts.find(p => String(p.id) === String(id));
+}
+
+// 1. 2G SMS Relay Dispatch
+window.relayPostViaSms = function(postId) {
+  const post = findPostById(postId);
+  if (!post) return;
+  openSmsDispatchModal(post);
+};
+
+function openSmsDispatchModal(post) {
+  const smsModal = document.getElementById('smsModal');
+  const preview = document.getElementById('smsPayloadPreview');
+  const directLink = document.getElementById('smsDirectLaunchLink');
+  if (!smsModal) return;
+
+  const smsBody = formatSmsText(post);
+  preview.textContent = smsBody;
+
+  // Cross-platform SMS URI scheme: 'sms:112?&body=' works reliably across iOS & Android
+  directLink.href = `sms:112?&body=${encodeURIComponent(smsBody)}`;
+
+  // Store current payload for copy button
+  smsModal.dataset.currentPayload = smsBody;
+  smsModal.classList.add('active');
+}
+
+// 2. Offline QR Sneakernet Relay
+window.showPostQr = function(postId) {
+  const post = findPostById(postId);
+  if (!post) return;
+  openQrRelayModal(post);
+};
+
+function openQrRelayModal(post) {
+  const qrModal = document.getElementById('qrRelayModal');
+  const canvas = document.getElementById('qrCanvas');
+  const textDisplay = document.getElementById('qrPacketText');
+  if (!qrModal || !canvas) return;
+
+  const packet = formatPostEmergencyPayload(post);
+  textDisplay.textContent = packet;
+  qrModal.dataset.currentPayload = packet;
+
+  // Render QR Code onto Canvas using bundled offline QRCode engine
+  if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
+    QRCode.toCanvas(canvas, packet, {
+      width: 240,
+      margin: 1,
+      color: { dark: '#000000', light: '#ffffff' }
+    }).catch(err => {
+      console.warn('[QR] Canvas render fallback:', err);
+      renderQrViaServerFallback(canvas, packet);
+    });
+  } else {
+    renderQrViaServerFallback(canvas, packet);
+  }
+
+  qrModal.classList.add('active');
+}
+
+async function renderQrViaServerFallback(canvas, text) {
+  try {
+    const res = await fetch(`/api/qr?text=${encodeURIComponent(text)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const img = new Image();
+      img.onload = () => {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = data.dataUrl;
+    }
+  } catch (err) {
+    console.warn('[QR] Server fallback failed:', err);
+  }
+}
+
+// 3. Ingest Relayed Report (Mesh & QR Scanner)
+function ingestReportPacket(rawText) {
+  if (!rawText || !rawText.trim()) return false;
+  const trimmed = rawText.trim();
+
+  let author = 'Survivor_Signal';
+  let category = 'aid';
+  let location = 'Relayed Area';
+  let text = trimmed;
+  let coords = null;
+
+  // Detect and parse standardized packet: CC#CAT|CALL:...|GPS:...|LOC:...|MSG:...
+  if (trimmed.startsWith('CC#')) {
+    const parts = trimmed.substring(3).split('|');
+    if (parts.length > 0) category = parts[0].toLowerCase();
+    
+    parts.slice(1).forEach(part => {
+      const [k, ...v] = part.split(':');
+      const val = v.join(':').trim();
+      if (k === 'CALL') author = val;
+      else if (k === 'GPS') coords = val;
+      else if (k === 'LOC') location = val;
+      else if (k === 'MSG') text = val;
+    });
+  } else if (trimmed.includes('CRISISCONNECT')) {
+    // Parse formatted SMS text
+    const lines = trimmed.split('\n');
+    lines.forEach(l => {
+      const [k, ...v] = l.split(':');
+      const val = v.join(':').trim();
+      if (k === 'FROM') author = val;
+      else if (k === 'CAT') category = val.toLowerCase();
+      else if (k === 'GPS') coords = val;
+      else if (k === 'LOC') location = val;
+      else if (k === 'MSG') text = val;
+    });
+  }
+
+  const newPost = {
+    id: Date.now(),
+    author: `${author} (Relayed)`,
+    location: location,
+    category: category,
+    text: text,
+    coordinates: coords,
+    source: 'mesh_qr',
+    relayed: true,
+    isPending: true,
+    timestamp: new Date().toISOString()
+  };
+
+  state.pendingPosts.unshift(newPost);
+  localStorage.setItem('crisis_pending_posts', JSON.stringify(state.pendingPosts));
+  updateSyncBadge();
+  renderCommunityFeed();
+
+  // Try opportunistic sync
+  if (navigator.onLine) {
+    flushPendingCommunityPosts();
+  }
+
+  return true;
+}
+
+// Submit Field Report (Standard PWA Flow)
 const communityForm = document.getElementById('communityPostForm');
 if (communityForm) {
   communityForm.addEventListener('submit', async (e) => {
@@ -799,12 +970,16 @@ if (communityForm) {
 
     if (!text) return;
 
+    const coords = state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : null;
+
     const postPayload = {
       id: Date.now(),
       author,
       location,
       category,
       text,
+      coordinates: coords,
+      source: 'pwa_sync',
       timestamp: new Date().toISOString()
     };
 
@@ -842,6 +1017,149 @@ if (communityForm) {
       }).catch(err => console.warn('Background sync registration failed:', err));
     }
   });
+
+  // Direct 2G SMS Button in Composer
+  const btnDispatchSms = document.getElementById('btnDispatchSms');
+  if (btnDispatchSms) {
+    btnDispatchSms.addEventListener('click', () => {
+      const author = document.getElementById('authorInput').value.trim() || 'Survivor';
+      const location = document.getElementById('locationInput').value.trim() || 'Sector';
+      const category = document.getElementById('categorySelect').value || 'aid';
+      const text = document.getElementById('textInput').value.trim();
+
+      if (!text) {
+        alert('Please enter report details first.');
+        document.getElementById('textInput').focus();
+        return;
+      }
+
+      const tempPost = {
+        id: Date.now(),
+        author,
+        location,
+        category,
+        text,
+        coordinates: state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : null,
+        timestamp: new Date().toISOString()
+      };
+
+      openSmsDispatchModal(tempPost);
+    });
+  }
+
+  // Direct Offline QR Mesh Button in Composer
+  const btnGenerateQr = document.getElementById('btnGenerateQr');
+  if (btnGenerateQr) {
+    btnGenerateQr.addEventListener('click', () => {
+      const author = document.getElementById('authorInput').value.trim() || 'Survivor';
+      const location = document.getElementById('locationInput').value.trim() || 'Local Area';
+      const category = document.getElementById('categorySelect').value || 'aid';
+      const text = document.getElementById('textInput').value.trim();
+
+      if (!text) {
+        alert('Please enter report details first.');
+        document.getElementById('textInput').focus();
+        return;
+      }
+
+      const coords = state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : null;
+      const post = {
+        id: Date.now(),
+        author,
+        location,
+        category,
+        text,
+        coordinates: coords,
+        source: 'mesh_qr',
+        isPending: true,
+        timestamp: new Date().toISOString()
+      };
+
+      // Queue in pending posts immediately
+      state.pendingPosts.unshift(post);
+      localStorage.setItem('crisis_pending_posts', JSON.stringify(state.pendingPosts));
+      updateSyncBadge();
+      renderCommunityFeed();
+
+      // Open QR for display immediately
+      openQrRelayModal(post);
+    });
+  }
+}
+
+// Ingest Modal Wire-Up
+const btnOpenIngest = document.getElementById('btnOpenIngestModal');
+const ingestModal = document.getElementById('ingestModal');
+const btnCloseIngest = document.getElementById('btnCloseIngestModal');
+const btnProcessIngest = document.getElementById('btnProcessIngest');
+
+if (btnOpenIngest && ingestModal) {
+  btnOpenIngest.addEventListener('click', () => {
+    document.getElementById('ingestPacketInput').value = '';
+    ingestModal.classList.add('active');
+  });
+}
+
+if (btnCloseIngest && ingestModal) {
+  btnCloseIngest.addEventListener('click', () => {
+    ingestModal.classList.remove('active');
+  });
+}
+
+if (btnProcessIngest && ingestModal) {
+  btnProcessIngest.addEventListener('click', () => {
+    const raw = document.getElementById('ingestPacketInput').value;
+    if (!raw || !raw.trim()) {
+      alert('Please enter or paste a report packet.');
+      return;
+    }
+    const success = ingestReportPacket(raw);
+    if (success) {
+      ingestModal.classList.remove('active');
+      alert('✅ Field report successfully ingested into local mesh store and queued for relay!');
+    }
+  });
+}
+
+// Modal Dismiss Wire-Ups
+const btnCloseSms = document.getElementById('btnCloseSmsModal');
+if (btnCloseSms) {
+  btnCloseSms.addEventListener('click', () => {
+    document.getElementById('smsModal').classList.remove('active');
+  });
+}
+
+const btnCopySms = document.getElementById('btnCopySmsPayload');
+if (btnCopySms) {
+  btnCopySms.addEventListener('click', () => {
+    const payload = document.getElementById('smsModal').dataset.currentPayload || '';
+    if (payload && navigator.clipboard) {
+      navigator.clipboard.writeText(payload).then(() => {
+        btnCopySms.textContent = '✅ Copied to Clipboard!';
+        setTimeout(() => btnCopySms.textContent = '📋 Copy Formatted SMS to Clipboard', 2000);
+      });
+    }
+  });
+}
+
+const btnCloseQr = document.getElementById('btnCloseQrModal');
+if (btnCloseQr) {
+  btnCloseQr.addEventListener('click', () => {
+    document.getElementById('qrRelayModal').classList.remove('active');
+  });
+}
+
+const btnCopyQr = document.getElementById('btnCopyQrPacket');
+if (btnCopyQr) {
+  btnCopyQr.addEventListener('click', () => {
+    const packet = document.getElementById('qrRelayModal').dataset.currentPayload || '';
+    if (packet && navigator.clipboard) {
+      navigator.clipboard.writeText(packet).then(() => {
+        btnCopyQr.textContent = '✅ Copied!';
+        setTimeout(() => btnCopyQr.textContent = '📋 Copy Packet', 2000);
+      });
+    }
+  });
 }
 
 // Auto-flush pending offline posts when connection returns
@@ -861,7 +1179,10 @@ async function flushPendingCommunityPosts() {
           author: post.author,
           location: post.location,
           category: post.category,
-          text: post.text
+          text: post.text,
+          coordinates: post.coordinates,
+          source: post.source || 'queued_offline',
+          relayed: post.relayed
         })
       });
 

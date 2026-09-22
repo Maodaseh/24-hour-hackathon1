@@ -213,15 +213,37 @@
               <label class="form-label" for="textInput">Report Details</label>
               <textarea id="textInput" class="form-textarea" placeholder="Describe the current situation, accessible routes, or assistance needed..." required></textarea>
             </div>
-            <button type="submit" class="btn-broadcast">
-              ⚡ BROADCAST TO COMMUNITY
-            </button>
+            <div class="composer-action-grid">
+              <button type="submit" class="btn-broadcast" id="btnBroadcastStandard">
+                ⚡ BROADCAST (PWA Sync)
+              </button>
+              <button type="button" class="btn-sms-relay" id="btnDispatchSms">
+                📡 DISPATCH VIA 2G SMS
+              </button>
+              <button type="button" class="btn-qr-relay" id="btnGenerateQr">
+                📲 OFFLINE QR RELAY
+              </button>
+            </div>
           </form>
         </div>
 
         <!-- Community Feed -->
-        <div class="community-feed" id="communityFeedContainer">
-          <!-- Rendered dynamically -->
+        <div class="community-feed-wrapper">
+          <div class="community-feed-header">
+            <div class="community-header-left">
+              <h3 style="font-size:1.05rem; font-weight:700; margin:0; display:flex; align-items:center; gap:8px;">
+                <span>📢 Live Field Reports</span>
+                <span class="pulse-dot"></span>
+              </h3>
+              <span class="community-subtext">Decentralized P2P & cloud synchronized alerts</span>
+            </div>
+            <button type="button" class="btn-ingest-qr" id="btnOpenIngestModal">
+              📥 Ingest Scanned Report
+            </button>
+          </div>
+          <div class="community-feed" id="communityFeedContainer">
+            <!-- Rendered dynamically -->
+          </div>
         </div>
 
       </div>
@@ -265,7 +287,98 @@
     </div>
   </div>
 
-  <!-- Client-Side App Logic -->
-  <script src="app.js?v=8"></script>
+  <!-- =======================================================
+       2G SMS EMERGENCY RELAY MODAL
+       ======================================================= -->
+  <div class="modal-overlay" id="smsModal">
+    <div class="modal-box">
+      <h2 class="modal-title" style="color:var(--color-warning);">📡 2G CELLULAR SMS RELAY</h2>
+      <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
+        Cellular SMS travels over 2G voice signaling channels (SS7) and transmits even when mobile data is completely <strong>0 KB/s</strong>.
+      </p>
+
+      <div class="location-share-box" style="margin-bottom:12px; text-align:left;">
+        <strong>DESTINATION EMERGENCY GATEWAY:</strong><br>
+        <span style="font-family:var(--font-mono); font-size:1.1rem; color:var(--color-primary); font-weight:bold;">112</span> (National Disaster & Emergency Response)
+      </div>
+
+      <div class="sms-preview-box">
+        <label class="form-label" style="margin-bottom:4px; font-size:0.75rem;">STANDARDIZED SMS PAYLOAD:</label>
+        <pre id="smsPayloadPreview" class="code-preview" style="background:#0f172a; padding:10px; border-radius:6px; font-size:0.8rem; color:#38bdf8; white-space:pre-wrap; border:1px solid #334155; margin:0;"></pre>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
+        <a id="smsDirectLaunchLink" href="#" class="btn-broadcast" style="text-align:center; text-decoration:none; background:var(--color-warning); color:#000; font-weight:700;">
+          🚀 OPEN NATIVE SMS APP (1-TAP DISPATCH)
+        </a>
+        <button type="button" class="btn-action-icon" id="btnCopySmsPayload" style="width:100%; justify-content:center;">
+          📋 Copy Formatted SMS to Clipboard
+        </button>
+        <button type="button" class="btn-close-modal" id="btnCloseSmsModal">
+          DISMISS
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =======================================================
+       OFFLINE QR MESH (SNEAKERNET) RELAY MODAL
+       ======================================================= -->
+  <div class="modal-overlay" id="qrRelayModal">
+    <div class="modal-box" style="text-align:center; max-width:440px;">
+      <h2 class="modal-title" style="color:#38bdf8;">📲 OFFLINE QR SNEAKERNET RELAY</h2>
+      <p style="font-size:0.82rem; color:#cbd5e1; margin-bottom:12px;">
+        Zero-RF visual mesh handoff. Passing volunteers or rescue runners can scan this QR code with their camera to carry and relay your distress report.
+      </p>
+
+      <div class="qr-canvas-container" style="background:#ffffff; padding:12px; border-radius:12px; display:inline-block; margin:0 auto 12px; box-shadow:0 0 25px rgba(56,189,248,0.35);">
+        <canvas id="qrCanvas" width="240" height="240" style="display:block;"></canvas>
+      </div>
+
+      <div class="location-share-box" style="text-align:left; font-size:0.75rem; word-break:break-all;">
+        <strong>COMPACT MESH PACKET:</strong><br>
+        <span id="qrPacketText" style="font-family:var(--font-mono); color:#94a3b8;">Generating...</span>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button type="button" class="btn-action-icon" id="btnCopyQrPacket" style="flex:1; justify-content:center;">
+          📋 Copy Packet
+        </button>
+        <button type="button" class="btn-close-modal" id="btnCloseQrModal" style="flex:1;">
+          DONE
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =======================================================
+       INGEST SCANNED REPORT MODAL (FOR RESPONDERS / RELAYS)
+       ======================================================= -->
+  <div class="modal-overlay" id="ingestModal">
+    <div class="modal-box">
+      <h2 class="modal-title" style="color:#10b981;">📥 INGEST FIELD REPORT</h2>
+      <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
+        Paste a survivor's distress packet (from QR scan or SMS). CrisisConnect will ingest it into your device and auto-upload it to the cloud grid once you reach network coverage.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label" for="ingestPacketInput">Packet String or Text</label>
+        <textarea id="ingestPacketInput" class="form-textarea" rows="4" placeholder="Paste packet like: CC#AID|CALL:Alpha|GPS:10.979,77.218|LOC:Camp 4|MSG:Need water..."></textarea>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+        <button type="button" class="btn-broadcast" id="btnProcessIngest" style="background:#10b981; color:#000; font-weight:700;">
+          ✅ INGEST & RELAY REPORT
+        </button>
+        <button type="button" class="btn-close-modal" id="btnCloseIngestModal">
+          CANCEL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offline QR Engine & Client-Side App Logic -->
+  <script src="qrcode.bundle.js"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
