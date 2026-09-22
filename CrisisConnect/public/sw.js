@@ -1,10 +1,11 @@
 // CrisisConnect Service Worker: Offline-First Crisis Grid
-const CACHE_NAME = 'crisisconnect-v10';
+const CACHE_NAME = 'crisisconnect-v11';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
   '/app.js',
+  '/firebase-config.js',
   '/qrcode.bundle.js',
   '/manifest.json',
   '/icon.svg',

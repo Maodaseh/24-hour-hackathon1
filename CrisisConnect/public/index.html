@@ -88,6 +88,11 @@
         </div>
       </div>
       <div class="header-actions">
+        <div id="authHeaderContainer">
+          <button class="btn-action-icon" id="btnOpenAuthModal" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;">
+            👤 <span class="hide-mobile">SIGN IN</span>
+          </button>
+        </div>
         <button class="btn-action-icon" id="btnFlashlight" title="Emergency Flashlight / Signal Torch">
           🔦 <span class="hide-mobile">TORCH</span>
         </button>
@@ -381,8 +386,107 @@
     </div>
   </div>
 
+  <!-- =======================================================
+       FIREBASE AUTHENTICATION & EMERGENCY IDENTITY MODAL
+       ======================================================= -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-box" style="max-width:440px;">
+      <h2 class="modal-title" style="color:#38bdf8; font-size:1.25rem;">
+        <span>🔐 EMERGENCY CLOUD ACCESS</span>
+      </h2>
+      <p style="font-size:0.8rem; color:#cbd5e1; margin-bottom:14px;">
+        Cloud-synchronized identity with automatic local offline caching. Works across all devices and during network blackouts.
+      </p>
+
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab-btn active" id="tabAuthSignIn">Sign In</button>
+        <button type="button" class="auth-tab-btn" id="tabAuthSignUp">Create Account</button>
+      </div>
+
+      <div id="authAlertBox" class="auth-alert" style="display:none;"></div>
+
+      <!-- Sign In Form -->
+      <form id="signInForm">
+        <div class="form-group">
+          <label class="form-label" for="signInEmail">Email Address</label>
+          <input type="email" id="signInEmail" class="form-input" placeholder="e.g. responder@crisis.org" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signInPassword">Password</label>
+          <input type="password" id="signInPassword" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-broadcast" style="width:100%; margin-top:8px;">
+          🔐 Sign In to Emergency Grid
+        </button>
+      </form>
+
+      <!-- Sign Up Form (hidden by default) -->
+      <form id="signUpForm" style="display:none;">
+        <div class="form-group">
+          <label class="form-label" for="signUpName">Your Call-Sign / Name</label>
+          <input type="text" id="signUpName" class="form-input" placeholder="e.g. Volunteer_Mark or Dr_Kavitha" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Emergency Role</label>
+          <div class="role-selector-grid">
+            <label class="role-option">
+              <input type="radio" name="emergencyRole" value="survivor" checked>
+              <div class="role-card">
+                <span class="role-icon">👤</span>
+                <span class="role-name">Survivor</span>
+              </div>
+            </label>
+            <label class="role-option">
+              <input type="radio" name="emergencyRole" value="medic">
+              <div class="role-card">
+                <span class="role-icon">🛡️</span>
+                <span class="role-name">Medic / First Responder</span>
+              </div>
+            </label>
+            <label class="role-option">
+              <input type="radio" name="emergencyRole" value="volunteer">
+              <div class="role-card">
+                <span class="role-icon">🚒</span>
+                <span class="role-name">Volunteer</span>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signUpEmail">Email Address</label>
+          <input type="email" id="signUpEmail" class="form-input" placeholder="name@domain.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signUpPassword">Password</label>
+          <input type="password" id="signUpPassword" class="form-input" placeholder="At least 6 characters" minlength="6" required>
+        </div>
+        <button type="submit" class="btn-broadcast" style="width:100%; margin-top:8px; background:var(--color-safe-gradient);">
+          ✨ Register Emergency Identity
+        </button>
+      </form>
+
+      <div class="auth-divider">
+        <span>OR QUICK ACCESS</span>
+      </div>
+
+      <button type="button" class="btn-anonymous-auth" id="btnQuickAnonymousAuth">
+        ⚡ 1-Tap Anonymous Crisis Access (No Password)
+      </button>
+
+      <button type="button" class="btn-close-modal" id="btnCloseAuthModal" style="margin-top:12px;">
+        DISMISS
+      </button>
+    </div>
+  </div>
+
+  <!-- Google Firebase SDK (Compat Version for maximum cross-device & offline compatibility) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
   <!-- Offline QR Engine & Client-Side App Logic -->
   <script src="qrcode.bundle.js"></script>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

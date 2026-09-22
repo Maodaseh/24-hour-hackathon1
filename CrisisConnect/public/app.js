@@ -983,6 +983,11 @@ if (communityForm) {
       timestamp: new Date().toISOString()
     };
 
+    // Sync to Cloud Firestore with native offline cache
+    if (typeof CrisisAuth !== 'undefined' && CrisisAuth.syncPostToFirestore) {
+      CrisisAuth.syncPostToFirestore(postPayload);
+    }
+
     if (navigator.onLine) {
       try {
         const res = await fetch('/api/community', {
@@ -995,6 +1000,7 @@ if (communityForm) {
           state.communityPosts.unshift(created);
           renderCommunityFeed();
           communityForm.reset();
+          restoreComposerAuthor();
           return;
         }
       } catch (err) {
@@ -1009,6 +1015,7 @@ if (communityForm) {
     updateSyncBadge();
     renderCommunityFeed();
     communityForm.reset();
+    restoreComposerAuthor();
 
     // Request Service Worker Background Sync if supported
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
@@ -1017,6 +1024,14 @@ if (communityForm) {
       }).catch(err => console.warn('Background sync registration failed:', err));
     }
   });
+
+function restoreComposerAuthor() {
+  if (typeof CrisisAuth !== 'undefined' && CrisisAuth.currentUser) {
+    const roleUpper = (CrisisAuth.currentUser.role || 'SURVIVOR').toUpperCase();
+    const input = document.getElementById('authorInput');
+    if (input) input.value = `${CrisisAuth.currentUser.displayName} (${roleUpper})`;
+  }
+}
 
   // Direct 2G SMS Button in Composer
   const btnDispatchSms = document.getElementById('btnDispatchSms');
@@ -1329,6 +1344,154 @@ if (btnFlashlight) {
 }
 
 // =========================================================
+// 8B. FIREBASE AUTH & USER PROFILE MANAGEMENT
+// =========================================================
+function initAuthUI() {
+  if (typeof CrisisAuth !== 'undefined') {
+    CrisisAuth.init();
+    CrisisAuth.onAuthStateChanged(user => {
+      renderUserHeader(user);
+    });
+  }
+
+  const authModal = document.getElementById('authModal');
+  const btnCloseAuth = document.getElementById('btnCloseAuthModal');
+  const tabSignIn = document.getElementById('tabAuthSignIn');
+  const tabSignUp = document.getElementById('tabAuthSignUp');
+  const signInForm = document.getElementById('signInForm');
+  const signUpForm = document.getElementById('signUpForm');
+  const authAlert = document.getElementById('authAlertBox');
+  const btnAnon = document.getElementById('btnQuickAnonymousAuth');
+
+  // Open Auth modal (delegated for dynamic buttons)
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#btnOpenAuthModal')) {
+      if (authModal) authModal.classList.add('active');
+    } else if (e.target.closest('#btnLogout')) {
+      if (typeof CrisisAuth !== 'undefined') {
+        CrisisAuth.signOut();
+      }
+    }
+  });
+
+  if (btnCloseAuth && authModal) {
+    btnCloseAuth.addEventListener('click', () => {
+      authModal.classList.remove('active');
+    });
+  }
+
+  // Toggle tabs
+  if (tabSignIn && tabSignUp) {
+    tabSignIn.addEventListener('click', () => {
+      tabSignIn.classList.add('active');
+      tabSignUp.classList.remove('active');
+      signInForm.style.display = 'block';
+      signUpForm.style.display = 'none';
+      if (authAlert) authAlert.style.display = 'none';
+    });
+    tabSignUp.addEventListener('click', () => {
+      tabSignUp.classList.add('active');
+      tabSignIn.classList.remove('active');
+      signUpForm.style.display = 'block';
+      signInForm.style.display = 'none';
+      if (authAlert) authAlert.style.display = 'none';
+    });
+  }
+
+  // Handle Sign In Form
+  if (signInForm) {
+    signInForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('signInEmail').value.trim();
+      const pass = document.getElementById('signInPassword').value;
+      if (!email || !pass) return;
+
+      try {
+        const res = await CrisisAuth.signIn(email, pass);
+        if (res.success) {
+          if (authModal) authModal.classList.remove('active');
+          signInForm.reset();
+        }
+      } catch (err) {
+        showAuthAlert(err.message, 'error');
+      }
+    });
+  }
+
+  // Handle Sign Up Form
+  if (signUpForm) {
+    signUpForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('signUpName').value.trim();
+      const email = document.getElementById('signUpEmail').value.trim();
+      const pass = document.getElementById('signUpPassword').value;
+      const roleElem = document.querySelector('input[name="emergencyRole"]:checked');
+      const role = roleElem ? roleElem.value : 'survivor';
+
+      if (!name || !email || !pass) return;
+
+      try {
+        const res = await CrisisAuth.signUp(email, pass, name, role);
+        if (res.success) {
+          if (authModal) authModal.classList.remove('active');
+          signUpForm.reset();
+        }
+      } catch (err) {
+        showAuthAlert(err.message, 'error');
+      }
+    });
+  }
+
+  // Handle Quick Anonymous Login
+  if (btnAnon) {
+    btnAnon.addEventListener('click', async () => {
+      try {
+        await CrisisAuth.signInAnonymously();
+        if (authModal) authModal.classList.remove('active');
+      } catch (err) {
+        console.warn('Anonymous login error:', err);
+      }
+    });
+  }
+}
+
+function showAuthAlert(msg, type = 'error') {
+  const alertBox = document.getElementById('authAlertBox');
+  if (!alertBox) return;
+  alertBox.className = `auth-alert ${type}`;
+  alertBox.textContent = msg;
+  alertBox.style.display = 'block';
+}
+
+function renderUserHeader(user) {
+  const container = document.getElementById('authHeaderContainer');
+  if (!container) return;
+
+  if (user) {
+    const roleUpper = (user.role || 'SURVIVOR').toUpperCase();
+    container.innerHTML = `
+      <div class="user-profile-chip">
+        <span class="user-callsign">👤 ${escapeHtml(user.displayName || user.email.split('@')[0])}</span>
+        <span class="user-role-badge ${user.role || 'survivor'}">${roleUpper}</span>
+        <button class="btn-logout" id="btnLogout" title="Sign Out">⎋</button>
+      </div>
+    `;
+
+    // Auto-fill author in Community Composer
+    const authorInput = document.getElementById('authorInput');
+    if (authorInput && !authorInput.value) {
+      authorInput.value = `${user.displayName || 'Responder'} (${roleUpper})`;
+    }
+  } else {
+    container.innerHTML = `
+      <button class="btn-action-icon" id="btnOpenAuthModal" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;">
+        👤 <span class="hide-mobile">SIGN IN</span>
+      </button>
+    `;
+  }
+}
+
+// =========================================================
 // 9. INITIALIZATION
 // =========================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -1339,6 +1502,7 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchDisasterAlerts();
   fetchShelters();
   fetchCommunityPosts();
+  initAuthUI();
 
   // Wire up Adaptive Mode buttons (Judge Dev Showcase)
   document.querySelectorAll('.mode-btn').forEach(btn => {
