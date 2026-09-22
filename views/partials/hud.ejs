@@ -1,0 +1,64 @@
+<!-- ========================================== -->
+<!-- Module 4: Performance Monitoring Dashboard -->
+<!-- (Refactored to support HIGH/MEDIUM/LOW Mode)-->
+<!-- ========================================== -->
+<div id="developer-hud" class="fixed bottom-4 right-4 w-72 bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-lg p-4 shadow-2xl z-[9999] font-mono text-white text-sm">
+  <div class="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
+    <h3 class="font-bold text-cyan-400 flex items-center gap-2">
+      <i class="fa-solid fa-microchip"></i> Dev HUD
+    </h3>
+  </div>
+  
+  <div class="space-y-3">
+    <div class="flex justify-between items-center">
+      <span class="text-gray-400">Adaptive Tier:</span>
+      <span id="hud-tier" class="font-bold text-yellow-400"><%= mode %></span>
+    </div>
+    <div class="flex justify-between items-center">
+      <span class="text-gray-400">Network Speed:</span>
+      <span id="hud-network" class="font-bold text-cyan-400">Measuring...</span>
+    </div>
+    <div class="flex justify-between items-center">
+      <span class="text-gray-400">LCP Score:</span>
+      <span id="hud-lcp" class="font-bold text-gray-400">Waiting...</span>
+    </div>
+    <div class="flex justify-between items-center">
+      <span class="text-gray-400">INP Score:</span>
+      <span id="hud-inp" class="font-bold text-gray-400">Interact to test...</span>
+    </div>
+  </div>
+
+  <div class="mt-4 pt-3 border-t border-slate-700">
+    <!-- Active Optimizations Summary for Judges -->
+    <div class="text-[10px] text-gray-400 bg-black/25 p-2 rounded mb-3 border border-slate-600">
+      <% if (mode === 'HIGH') { %>
+        <strong class="text-cyan-400">HIGH-END Active:</strong> 2MB Textures, Prefetching & 3D Interactive JS.
+      <% } else if (mode === 'MEDIUM') { %>
+        <strong class="text-yellow-400">MEDIUM Active:</strong> Compressed Assets, Std Gallery, Limited Prefetch.
+      <% } else { %>
+        <strong class="text-amber-500">LOW-END Active:</strong> Tiny Placeholder Images, Zero JS, Zero Prefetch.
+      <% } %>
+    </div>
+    
+    <!-- Judge Mode Switcher Controls -->
+    <div class="flex gap-2 mb-3">
+      <button type="button" class="flex-1 bg-slate-800 hover:bg-slate-700 text-[9px] font-bold py-1.5 rounded border <%= mode === 'HIGH' ? 'border-cyan-400 text-cyan-400' : 'border-slate-600 text-gray-300' %>" onclick="document.cookie='adaptive_mode=HIGH; path=/; max-age=3600'; window.location.reload();">
+        🚀 HIGH
+      </button>
+      <button type="button" class="flex-1 bg-slate-800 hover:bg-slate-700 text-[9px] font-bold py-1.5 rounded border <%= mode === 'MEDIUM' ? 'border-yellow-400 text-yellow-400' : 'border-slate-600 text-gray-300' %>" onclick="document.cookie='adaptive_mode=MEDIUM; path=/; max-age=3600'; window.location.reload();">
+        ⚖️ MED
+      </button>
+      <button type="button" class="flex-1 bg-slate-800 hover:bg-slate-700 text-[9px] font-bold py-1.5 rounded border <%= mode === 'LOW' ? 'border-amber-500 text-amber-500' : 'border-slate-600 text-gray-300' %>" onclick="document.cookie='adaptive_mode=LOW; path=/; max-age=3600'; window.location.reload();">
+        ⚡ LOW
+      </button>
+    </div>
+
+    <!-- INP Stress Test Button -->
+    <button id="simulate-interaction-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-xs transition-colors shadow">
+      🧪 Stress Test INP
+    </button>
+    <p id="simulate-result" class="text-[10px] text-cyan-300 mt-2 text-center truncate"></p>
+  </div>
+</div>
+
+<script type="module" src="/js/metrics.js"></script>

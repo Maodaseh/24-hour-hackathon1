@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CrisisConnect — Offline-First Emergency & Disaster Response Grid</title>
+  <meta name="description" content="Life-saving emergency evacuation routes, safe shelters, real-time alerts, and community aid for extreme network and offline disaster environments.">
+  <meta name="theme-color" content="#dc2626">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css?v=8">
+  <!-- Leaflet CSS for Vector & Satellite Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+
+  <!-- =======================================================
+       STICKY APP HEADER & EMERGENCY STATUS BAR
+       ======================================================= -->
+  <header class="app-header">
+    <div class="system-status-bar">
+      <div class="status-indicator">
+        <span class="pulse-dot" id="networkDot"></span>
+        <span id="networkStatusText">DETECTING GRID...</span>
+      </div>
+      <div class="status-stats">
+        <span id="batteryStatus">⚡ BAT: --%</span>
+        <span class="sync-badge" id="syncStatusBadge">0 Queued</span>
+      </div>
+    </div>
+
+    <!-- ADAPTIVE MODE SHOWCASE BAR (JUDGE DEMO BAR) -->
+    <div class="adaptive-control-bar" id="adaptiveControlBar">
+      <div class="control-row-top">
+        <div class="mode-selector-label">
+          <span class="pulse-indicator"></span>
+          <strong>ADAPTIVE GRID:</strong>
+        </div>
+        <div class="mode-toggle-group">
+          <button class="mode-btn" id="btnModeHigh" data-mode="high">
+            ⚡ HIGH (5G Command)
+          </button>
+          <button class="mode-btn" id="btnModeLow" data-mode="low">
+            📡 LOW (2G Survivor)
+          </button>
+          <button class="mode-btn" id="btnModeOffline" data-mode="offline">
+            ❌ OFFLINE (Blackout)
+          </button>
+          <button class="mode-btn active" id="btnModeAuto" data-mode="auto">
+            🔄 Auto-Detect
+          </button>
+        </div>
+      </div>
+      <div class="control-row-metrics" id="metricsDisplayBar">
+        <div class="metric-item">
+          <span class="metric-label">NETWORK PAYLOAD:</span>
+          <span class="metric-val" id="metricPayload">4.82 MB</span>
+          <span class="metric-badge" id="metricSavedBadge">Standard</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">LOAD TIME (LCP):</span>
+          <span class="metric-val" id="metricLcp">1.84s</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">MAP ENGINE:</span>
+          <span class="metric-val" id="metricMapEngine">Satellite Photorealistic</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">BATTERY PROFILE:</span>
+          <span class="metric-val" id="metricPower">GPU Active</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-header-row">
+      <div class="brand">
+        <div class="brand-icon">⚠</div>
+        <div>
+          <div class="brand-title">
+            CRISISCONNECT
+            <span class="brand-badge">2G/OFFLINE PWA</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-action-icon" id="btnFlashlight" title="Emergency Flashlight / Signal Torch">
+          🔦 <span class="hide-mobile">TORCH</span>
+        </button>
+        <button class="btn-sos" id="btnOpenSos">
+          🚨 SOS AID
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN NAVIGATION TABS -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="tab-button active" data-tab="mapPane" role="tab" id="tabMap">
+        🗺️ MAP & RADAR
+      </button>
+      <button class="tab-button" data-tab="alertsPane" role="tab" id="tabAlerts">
+        🚨 ALERTS <span class="tab-badge" id="alertsBadge">3</span>
+      </button>
+      <button class="tab-button" data-tab="sheltersPane" role="tab" id="tabShelters">
+        🏥 SHELTERS <span class="tab-badge" id="sheltersBadge">4</span>
+      </button>
+      <button class="tab-button" data-tab="communityPane" role="tab" id="tabCommunity">
+        👥 COMMUNITY <span class="tab-badge" id="communityBadge">3</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- =======================================================
+       MAIN CONTAINER
+       ======================================================= -->
+  <main class="main-content">
+    
+    <!-- PANE 1: LIVE MAP & 2G VECTOR COMPASS -->
+    <section id="mapPane" class="tab-pane active" role="tabpanel">
+      <div class="map-view-container">
+        
+        <div class="map-wrapper">
+          <div id="map"></div>
+
+          <!-- 2G Vector Compass Radar Overlay -->
+          <div class="vector-mode-card" id="vectorRadarCard">
+            <div class="vector-header">
+              <span>2G VECTOR RADAR</span>
+              <span id="gpsLockStatus">GPS LOCKED</span>
+            </div>
+            <div class="radar-compass-wrapper">
+              <div class="compass-dial" id="compassDial">
+                <div class="compass-arrow" id="compassArrow"></div>
+              </div>
+              <div class="vector-info">
+                <div class="vector-target-title" id="radarTargetName">Nearest Shelter</div>
+                <div class="vector-target-distance" id="radarTargetDist">0.8 km</div>
+                <div class="vector-bearing-text" id="radarTargetBearing">Heading 32° NNE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar: Nearby Waypoints -->
+        <aside class="map-sidebar">
+          <div class="sidebar-title">
+            <span>NEARBY WAYPOINTS</span>
+            <span style="font-size:0.75rem; color:var(--text-secondary);" id="gpsCoordsText">37.7749, -122.4194</span>
+          </div>
+          <div class="waypoint-list" id="waypointList">
+            <!-- Dynamic Waypoint Cards inserted via app.js -->
+          </div>
+        </aside>
+
+      </div>
+    </section>
+
+    <!-- PANE 2: LIVE DISASTER ALERTS & GDACS BULLETINS -->
+    <section id="alertsPane" class="tab-pane" role="tabpanel">
+      <div class="alerts-header">
+        <div>
+          <h2 class="alerts-title">Disaster Bulletins & Live Feeds</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary);">Real-time hazard notifications synchronized via GDACS & Emergency Grid</p>
+        </div>
+        <button class="btn-action-icon" id="btnRefreshAlerts">↻ Refresh</button>
+      </div>
+      <div class="disaster-feed" id="disasterFeedList">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- PANE 3: SAFE SHELTERS & AID STATIONS -->
+    <section id="sheltersPane" class="tab-pane" role="tabpanel">
+      <div class="alerts-header">
+        <div>
+          <h2 class="alerts-title">Verified Emergency Shelters</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary);">Sorted by closest walking distance from your current location</p>
+        </div>
+      </div>
+      <div class="shelter-grid" id="sheltersListContainer">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- PANE 4: COMMUNITY AID & SURVIVOR REPORTS -->
+    <section id="communityPane" class="tab-pane" role="tabpanel">
+      <div class="community-layout">
+        
+        <!-- Post Composer -->
+        <div class="post-composer-card">
+          <h3 class="composer-title">📢 Broadcast Field Report</h3>
+          <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:12px;">
+            Posts will automatically queue and sync even if internet disconnects.
+          </p>
+          <form id="communityPostForm">
+            <div class="form-group">
+              <label class="form-label" for="authorInput">Your Call-Sign / Name</label>
+              <input type="text" id="authorInput" class="form-input" placeholder="e.g. Volunteer_Mark or Resident_B" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="locationInput">Specific Location / Landmark</label>
+              <input type="text" id="locationInput" class="form-input" placeholder="e.g. 4th & Market St" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="categorySelect">Category</label>
+              <select id="categorySelect" class="form-select">
+                <option value="aid">Aid & Medical Supplies</option>
+                <option value="hazard">Hazard / Blocked Route</option>
+                <option value="water">Drinking Water & Food</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="textInput">Report Details</label>
+              <textarea id="textInput" class="form-textarea" placeholder="Describe the current situation, accessible routes, or assistance needed..." required></textarea>
+            </div>
+            <button type="submit" class="btn-broadcast">
+              ⚡ BROADCAST TO COMMUNITY
+            </button>
+          </form>
+        </div>
+
+        <!-- Community Feed -->
+        <div class="community-feed" id="communityFeedContainer">
+          <!-- Rendered dynamically -->
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =======================================================
+       EMERGENCY SOS MODAL
+       ======================================================= -->
+  <div class="modal-overlay" id="sosModal">
+    <div class="modal-box">
+      <h2 class="modal-title">🚨 EMERGENCY ASSISTANCE</h2>
+      <p style="font-size:0.9rem; color:#cbd5e1; margin-bottom:12px;">
+        Immediate dispatch lines. Cellular voice and SMS work over degraded 2G GSM bands even when data fails.
+      </p>
+
+      <div class="location-share-box">
+        <strong>YOUR EXACT GPS COORDINATES:</strong><br>
+        <span id="sosCoordinatesDisplay">Acquiring satellite lock...</span>
+      </div>
+
+      <div class="sos-call-grid">
+        <a href="tel:911" class="sos-call-btn">
+          <span class="sos-number">911</span>
+          <span class="sos-label">Police / Ambulance</span>
+        </a>
+        <a href="tel:112" class="sos-call-btn">
+          <span class="sos-number">112</span>
+          <span class="sos-label">Global Emergency</span>
+        </a>
+      </div>
+
+      <button class="btn-action-icon" id="btnCopyCoords" style="width:100%; margin-bottom:12px; justify-content:center;">
+        📋 Copy GPS Location for SMS
+      </button>
+
+      <button class="btn-close-modal" id="btnCloseSos">
+        CLOSE WINDOW
+      </button>
+    </div>
+  </div>
+
+  <!-- Client-Side App Logic -->
+  <script src="app.js?v=8"></script>
+</body>
+</html>

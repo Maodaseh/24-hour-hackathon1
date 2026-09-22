@@ -1,0 +1,90 @@
+[
+  {
+    "id": 1,
+    "title": "Quantum Pro ANC Wireless Headphones",
+    "tagline": "Spatial Audio with Adaptive Noise Cancellation & 40hr Battery",
+    "category": "Audio",
+    "price": 349.99,
+    "rating": 4.9,
+    "reviewsCount": 128,
+    "description": "Engineered with custom beryllium acoustic drivers and dual-core neural processors. Delivers studio-grade high-fidelity sound, dynamic head-tracking spatial audio, and active environmental noise isolation.",
+    "specs": {
+      "Driver Size": "45mm Custom Beryllium",
+      "Frequency Response": "5Hz - 48kHz",
+      "Battery Life": "Up to 40 Hours (ANC On)",
+      "Connectivity": "Bluetooth 5.4, Ultra-Wideband & USB-C Lossless",
+      "Weight": "248g Aluminum-Magnesium Alloy"
+    },
+    "highResImageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=2000&q=100",
+    "lowResImageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=300&q=20",
+    "highResSize": "~1.8 MB",
+    "lowResSize": "~24 KB",
+    "accentColor": "#06b6d4"
+  },
+  {
+    "id": 2,
+    "title": "CyberBlade OLED 16 Pro Gaming Laptop",
+    "tagline": "240Hz 4K Mini-LED, Liquid Metal Vapor Chamber Cooling",
+    "category": "Computers",
+    "price": 2499.00,
+    "rating": 4.8,
+    "reviewsCount": 94,
+    "description": "Ultra-thin 16mm CNC chassis packing desktop-class processing power. Features a vivid color-calibrated 16-inch 240Hz display, mechanical low-profile switches, and dual vapor chamber thermals.",
+    "specs": {
+      "Display": "16-inch 3840x2400 OLED 240Hz 0.2ms",
+      "Processor": "16-Core / 32-Thread 5.6GHz Max Boost",
+      "Graphics": "Dedicated AI Tensor Ray-Tracing GPU 16GB",
+      "RAM & Storage": "64GB DDR5 6400MHz / 2TB Gen5 NVMe",
+      "Battery": "99.9Wh Rapid Charge (0-80% in 35m)"
+    },
+    "highResImageUrl": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=2000&q=100",
+    "lowResImageUrl": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=300&q=20",
+    "highResSize": "~2.1 MB",
+    "lowResSize": "~26 KB",
+    "accentColor": "#8b5cf6"
+  },
+  {
+    "id": 3,
+    "title": "AuraVision Next-Gen AR Smart Glasses",
+    "tagline": "Micro-OLED Waveguide Optics with AI Spatial HUD",
+    "category": "Wearables",
+    "price": 599.00,
+    "rating": 4.7,
+    "reviewsCount": 62,
+    "description": "Seamless real-world digital overlay in a featherweight 68g eyewear frame. Features dual 1080p micro-OLED optical waveguides, gesture radar sensors, and whisper-quiet directional bone conduction audio.",
+    "specs": {
+      "Optics": "Dual 1080p Micro-OLED Binocular Waveguide",
+      "Field of View": "52° Diagonal Immersive FOV",
+      "Sensors": "6DoF Spatial Tracking + Gesture Radar",
+      "Audio": "Directional Spatial Micro-Speakers",
+      "Weight": "68 grams Ultra-light Titanium"
+    },
+    "highResImageUrl": "https://images.unsplash.com/photo-1572635196237-14b3f281501f?auto=format&fit=crop&w=2000&q=100",
+    "lowResImageUrl": "https://images.unsplash.com/photo-1572635196237-14b3f281501f?auto=format&fit=crop&w=300&q=20",
+    "highResSize": "~1.9 MB",
+    "lowResSize": "~21 KB",
+    "accentColor": "#10b981"
+  },
+  {
+    "id": 4,
+    "title": "TitanStrike Magnetic Mechanical Keyboard",
+    "tagline": "Hall-Effect Magnetic Switches with 0.1mm Rapid Trigger",
+    "category": "Peripherals",
+    "price": 189.99,
+    "rating": 4.9,
+    "reviewsCount": 215,
+    "description": "Engineered for esports perfection with contact-free Hall effect magnetic sensors. Customize actuation point per key from 0.1mm to 4.0mm with 8000Hz polling rate and solid brass sound-dampening weight.",
+    "specs": {
+      "Switches": "Hall Effect Magnetic Linear Switches",
+      "Actuation": "0.1mm - 4.0mm Dynamic Rapid Trigger",
+      "Polling Rate": "8000Hz True High-Speed USB",
+      "Chassis": "Anodized Aerospace Aluminum 6063",
+      "Lighting": "Per-Key RGB with Underglow Diffuser"
+    },
+    "highResImageUrl": "https://images.unsplash.com/photo-1595225476474-87563907a212?auto=format&fit=crop&w=2000&q=100",
+    "lowResImageUrl": "https://images.unsplash.com/photo-1595225476474-87563907a212?auto=format&fit=crop&w=300&q=20",
+    "highResSize": "~1.7 MB",
+    "lowResSize": "~23 KB",
+    "accentColor": "#f59e0b"
+  }
+]

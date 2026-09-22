@@ -1,0 +1,18 @@
+{
+  "short_name": "CrisisConnect",
+  "name": "CrisisConnect: Emergency & Disaster Grid",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0a0e14",
+  "theme_color": "#dc2626",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["news", "utilities", "social"]
+}
