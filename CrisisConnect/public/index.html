@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=33">
+  <link rel="stylesheet" href="/styles.css?v=34">
   <script>
     document.documentElement.setAttribute('data-theme', 'light');
     try {
@@ -100,9 +100,6 @@
         </div>
       </div>
       <div class="header-actions">
-        <div class="btn-action-icon btn-theme-toggle" id="btnThemeToggle" title="Enterprise Office Theme Active" style="background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; font-weight:700;">
-          <span id="themeToggleIcon">🏢</span> <span class="hide-mobile" id="themeToggleText">OFFICE THEME</span>
-        </div>
         <div id="authHeaderContainer">
           <button class="btn-action-icon" id="btnOpenAuthModal" style="border-color:var(--border-color); color:var(--text-accent);">
             👤 <span class="hide-mobile">SIGN IN</span>
@@ -184,9 +181,63 @@
       <div class="alerts-header">
         <div>
           <h2 class="alerts-title">Disaster Bulletins & Live Feeds</h2>
-          <p style="font-size:0.85rem; color:var(--text-secondary);">Real-time hazard notifications synchronized via GDACS & Emergency Grid</p>
+          <p style="font-size:0.85rem; color:var(--text-secondary);" id="alertsHeaderSubtext">Real-time hazard notifications synchronized via Official Command & GDACS</p>
         </div>
-        <button class="btn-action-icon" id="btnRefreshAlerts">↻ Refresh</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="adminActiveBadge" style="display:none; font-size:0.75rem; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; padding:4px 10px; border-radius:20px; font-weight:800;">
+            🛡️ ADMIN BROADCASTER
+          </span>
+          <button class="btn-action-icon" id="btnRefreshAlerts">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Admin Broadcast Console (Shown ONLY to authenticated Admins) -->
+      <div class="admin-composer-card" id="adminAlertComposerCard" style="display:none; background:#ffffff; border:1.5px solid #2563eb; border-radius:10px; padding:18px; margin-bottom:20px; box-shadow:0 4px 16px rgba(37,99,235,0.12);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.4rem;">📢</span>
+            <div>
+              <h3 style="margin:0; font-size:1.05rem; font-weight:800; color:#0f172a;">Broadcast Official Disaster Bulletin</h3>
+              <p style="margin:2px 0 0; font-size:0.76rem; color:#64748b;">Command Authorization Active: Real-time broadcast pushed across all survivor grids.</p>
+            </div>
+          </div>
+          <span class="user-role-badge admin" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; padding:3px 10px; border-radius:20px; font-size:0.72rem; font-weight:800;">🛡️ COMMAND ADMIN</span>
+        </div>
+        <form id="adminAlertForm">
+          <div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; margin-bottom:12px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="adminAlertTitle">Official Alert Headline <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="adminAlertTitle" class="form-input" placeholder="e.g. RED ALERT: Dam Floodgates Opened — Lowlands Evacuation" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="adminAlertSeverity">Threat Level</label>
+              <select id="adminAlertSeverity" class="form-select">
+                <option value="Red" selected>🔴 RED ALERT (Critical Danger)</option>
+                <option value="Orange">🟠 ORANGE ALERT (High Warning)</option>
+                <option value="Green">🟢 GREEN ADVISORY (Resolved / Safe)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="form-label" for="adminAlertDesc">Critical Guidance & Instructions for Survivors <span style="color:#ef4444;">*</span></label>
+            <textarea id="adminAlertDesc" class="form-textarea" rows="3" placeholder="Provide actionable instructions (e.g. Evacuate to higher ground immediately; do not attempt to drive through flooded roads)..." required></textarea>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="adminAlertSource">Issuing Authority / Agency</label>
+              <input type="text" id="adminAlertSource" class="form-input" placeholder="e.g. District Disaster Management Command">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="adminAlertSector">Target Disaster Sector</label>
+              <input type="text" id="adminAlertSector" class="form-input" placeholder="e.g. Perundurai Central & Bhavani Basin">
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:10px;">
+            <button type="submit" id="btnSubmitAdminAlert" class="btn-broadcast" style="background:#dc2626; color:#fff; font-weight:800; border:none; padding:10px 22px; border-radius:6px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; box-shadow:0 3px 12px rgba(220,38,38,0.35);">
+              🚨 Broadcast Alert in Real-Time
+            </button>
+          </div>
+        </form>
       </div>
       <div class="disaster-feed" id="disasterFeedList">
         <!-- Rendered dynamically -->
@@ -467,6 +518,18 @@
           <label class="form-label" for="signInPassword">Password</label>
           <input type="password" id="signInPassword" class="form-input" placeholder="••••••••" required>
         </div>
+        <div class="form-group" id="signInAdminKeyToggleGroup" style="margin-top:10px;">
+          <label style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="chkSignInAsAdmin">
+            <span>🛡️ Sign in with Command Admin Authorization</span>
+          </label>
+        </div>
+        <div class="form-group" id="signInAdminKeyField" style="display:none; background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:6px; margin-bottom:12px;">
+          <label class="form-label" for="signInAdminKey" style="color:#b91c1c; font-weight:800; font-size:0.8rem;">
+            🔐 Unique Admin Security Key <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="password" id="signInAdminKey" class="form-input" placeholder="Enter master security key (CRISIS-ADMIN-2024)">
+        </div>
         <button type="submit" class="btn-broadcast" style="width:100%; margin-top:8px;">
           🔐 Sign In to Emergency Grid
         </button>
@@ -502,6 +565,13 @@
                 <span class="role-name">Volunteer</span>
               </div>
             </label>
+            <label class="role-option">
+              <input type="radio" name="emergencyRole" value="admin">
+              <div class="role-card">
+                <span class="role-icon">🛡️</span>
+                <span class="role-name">Command Admin</span>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -518,6 +588,20 @@
           <input type="tel" id="signUpPhone" class="form-input" placeholder="e.g. +91 94432 11099 (Hotline for survivors)" style="font-size:0.95rem;">
           <span id="phoneFieldHint" style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:5px; line-height:1.35;">
             Survivors in disaster zones will see 1-tap 📞 Call, 💬 SMS, and 🟢 WhatsApp buttons to reach you.
+          </span>
+        </div>
+
+        <!-- Unique Admin Security Key Field (Shown ONLY when Admin role is selected) -->
+        <div class="form-group" id="signUpAdminKeyField" style="display:none; background:#fef2f2; border:1px solid #fecaca; padding:12px; border-radius:8px; margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <label class="form-label" for="signUpAdminKey" style="margin:0; color:#b91c1c; font-weight:800; font-size:0.82rem;">
+              🔐 Unique Admin Security Key <span style="color:#ef4444;">* (Required for Admin Role)</span>
+            </label>
+            <span style="font-size:0.65rem; background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-weight:700;">COMMAND ONLY</span>
+          </div>
+          <input type="password" id="signUpAdminKey" class="form-input" placeholder="Enter master security key (CRISIS-ADMIN-2024)">
+          <span style="font-size:0.72rem; color:#7f1d1d; display:block; margin-top:4px;">
+            Enables official disaster alert broadcasting across all survivor terminals. Master key: <code>CRISIS-ADMIN-2024</code>.
           </span>
         </div>
 
@@ -556,6 +640,6 @@
 
   <!-- Offline QR Engine & Client-Side App Logic -->
   <script src="/qrcode.bundle.js"></script>
-  <script src="/app.js?v=33"></script>
+  <script src="/app.js?v=34"></script>
 </body>
 </html>

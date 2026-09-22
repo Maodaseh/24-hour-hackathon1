@@ -1779,6 +1779,21 @@ body:not(.mode-survivor-2g) .high-mode-rich {
   border: 1px solid var(--color-warning-border);
 }
 
+.user-role-badge.admin {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  font-weight: 800;
+}
+
+.admin-composer-card {
+  background: var(--bg-card);
+  border: 1.5px solid #2563eb;
+  border-radius: var(--radius-md);
+  padding: 18px;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
+}
+
 .btn-logout {
   background: transparent;
   border: none;

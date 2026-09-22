@@ -538,21 +538,9 @@ function applyTheme(theme = 'light', showToastNotification = false) {
     localStorage.setItem('crisis_theme_office_applied', 'true');
   } catch(e) {}
 
-  const toggleBtn = document.getElementById('btnThemeToggle');
-  const iconSpan = document.getElementById('themeToggleIcon');
-  const textSpan = document.getElementById('themeToggleText');
-
-  if (iconSpan) iconSpan.textContent = '🏢';
-  if (textSpan) textSpan.textContent = 'OFFICE';
-  if (toggleBtn) toggleBtn.setAttribute('title', 'Corporate Office Theme');
-
   // Update map vector tile styling to clean standard OpenStreetMap (zero watermark, 100% free, no API key required)
   if (state.map && state.vectorLayer) {
     state.vectorLayer.setUrl('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
-  }
-
-  if (showToastNotification) {
-    showAdaptiveToast('🏢 Clean Professional Office Theme Active', 'high');
   }
 }
 
@@ -845,15 +833,56 @@ window.selectNavTarget = function(shelterId) {
 // =========================================================
 // 5. FETCH DATA (ALERTS, SHELTERS, COMMUNITY)
 // =========================================================
-async function fetchDisasterAlerts() {
+// Cross-tab real-time alerts synchronization channel
+const alertsChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('crisis_alerts_sync') : null;
+
+if (alertsChannel) {
+  alertsChannel.onmessage = (event) => {
+    if (event.data) {
+      if (event.data.type === 'NEW_DISASTER_ALERT') {
+        const incoming = event.data.alert;
+        if (incoming && !state.disasters.some(d => String(d.id) === String(incoming.id))) {
+          state.disasters.unshift(incoming);
+          renderDisasterAlerts();
+          showAdaptiveToast(`🚨 Official Command Alert Broadcasted: "${escapeHtml(incoming.title)}"`, 'high');
+        }
+      } else if (event.data.type === 'REVOKE_DISASTER_ALERT') {
+        state.disasters = state.disasters.filter(d => String(d.id) !== String(event.data.alertId));
+        renderDisasterAlerts();
+      }
+    }
+  };
+}
+
+// Active Real-Time Polling for live alerts across separate devices
+setInterval(() => {
+  if (state.isOnline && navigator.onLine) {
+    fetchDisasterAlerts(true);
+  }
+}, 4000);
+
+async function fetchDisasterAlerts(silent = false) {
   try {
     const res = await fetch('/api/disasters');
     if (res.ok) {
-      state.disasters = await res.json();
-      renderDisasterAlerts();
+      const incoming = await res.json();
+      if (Array.isArray(incoming)) {
+        const existingIds = new Set(state.disasters.map(d => String(d.id)));
+        let hasNew = false;
+        incoming.forEach(d => {
+          if (!existingIds.has(String(d.id))) {
+            hasNew = true;
+          }
+        });
+        state.disasters = incoming;
+        renderDisasterAlerts();
+        if (hasNew && silent) {
+          showAdaptiveToast('🚨 New official disaster alert updated in real-time', 'high');
+        }
+      }
     }
   } catch (err) {
-    console.warn('[App] Could not fetch live alerts, using local cached state');
+    if (!silent) console.warn('[App] Could not fetch live alerts, using local cached state');
   }
 }
 
@@ -863,12 +892,26 @@ function renderDisasterAlerts() {
 
   document.getElementById('alertsBadge').textContent = state.disasters.length;
   const isHigh = state.adaptiveMode === 'high';
+  const isAdmin = typeof CrisisAuth !== 'undefined' && CrisisAuth.isAdmin();
 
   container.innerHTML = state.disasters.map((item, idx) => {
+    const adminBadge = item.isAdminBroadcast ? `
+      <span style="font-size:0.68rem; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; padding:2px 8px; border-radius:12px; font-weight:800; display:inline-flex; align-items:center; gap:3px;">
+        🛡️ OFFICIAL COMMAND BROADCAST
+      </span>
+    ` : '';
+
+    const adminActions = isAdmin ? `
+      <button type="button" onclick="window.revokeDisasterAlert('${item.id}')" title="Revoke this alert from all terminals" style="background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; padding:4px 10px; border-radius:4px; font-size:0.74rem; cursor:pointer; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+        🗑️ Revoke Alert
+      </button>
+    ` : '';
+
     const highDesc = `
       <p class="alert-desc high-mode-rich">${item.description}</p>
-      <div class="rich-media-only" style="margin-bottom:8px; font-size:0.75rem; color:#38bdf8;">
-        🛰️ Satellite Radar Link: Sector grid active • Hazard radius: 1.2km
+      <div class="rich-media-only" style="margin-bottom:8px; font-size:0.75rem; color:#0284c7; display:flex; align-items:center; gap:8px;">
+        <span>🛰️ Satellite Radar Link: Sector grid active • Hazard radius: 1.2km</span>
+        ${adminBadge}
       </div>
     `;
 
@@ -884,19 +927,45 @@ function renderDisasterAlerts() {
     return `
       <article class="alert-card severity-${item.severity || 'Red'}">
         <div class="alert-top">
-          <h3 class="alert-title">${item.title}</h3>
+          <div>
+            <h3 class="alert-title">${item.title}</h3>
+            ${!isHigh && item.isAdminBroadcast ? adminBadge : ''}
+          </div>
           <span class="severity-pill ${item.severity || 'Red'}">${item.severity || 'Alert'}</span>
         </div>
         ${highDesc}
         ${lowDesc}
-        <div class="alert-meta">
+        <div class="alert-meta" style="display:flex; justify-content:space-between; align-items:center;">
           <span>SOURCE: ${item.source || 'GDACS Emergency System'}</span>
-          <span>${new Date(item.pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span>${new Date(item.pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            ${adminActions}
+          </div>
         </div>
       </article>
     `;
   }).join('');
 }
+
+// Global handler to revoke alert
+window.revokeDisasterAlert = async function(alertId) {
+  if (!confirm('Are you sure you want to revoke this emergency alert from all survivor screens?')) return;
+  const adminKey = typeof CrisisAuth !== 'undefined' ? CrisisAuth.getAdminKey() : '';
+  try {
+    await fetch(`/api/disasters/${alertId}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-key': adminKey }
+    });
+  } catch(e) {}
+
+  state.disasters = state.disasters.filter(d => String(d.id) !== String(alertId));
+  renderDisasterAlerts();
+
+  if (alertsChannel) {
+    alertsChannel.postMessage({ type: 'REVOKE_DISASTER_ALERT', alertId });
+  }
+  showAdaptiveToast('🗑️ Alert revoked from grid', 'low');
+};
 
 async function fetchShelters(customLat, customLon) {
   const lat = customLat || state.userLocation.lat;
@@ -2145,19 +2214,39 @@ function initAuthUI() {
     });
   }
 
+  // Handle Admin Key toggle in Sign In form
+  const chkSignInAsAdmin = document.getElementById('chkSignInAsAdmin');
+  const signInAdminKeyField = document.getElementById('signInAdminKeyField');
+  if (chkSignInAsAdmin && signInAdminKeyField) {
+    chkSignInAsAdmin.addEventListener('change', () => {
+      signInAdminKeyField.style.display = chkSignInAsAdmin.checked ? 'block' : 'none';
+      if (chkSignInAsAdmin.checked) {
+        const keyInput = document.getElementById('signInAdminKey');
+        if (keyInput) keyInput.focus();
+      }
+    });
+  }
+
   // Handle Sign In Form
   if (signInForm) {
     signInForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('signInEmail').value.trim();
       const pass = document.getElementById('signInPassword').value;
+      const adminKey = (chkSignInAsAdmin && chkSignInAsAdmin.checked)
+        ? document.getElementById('signInAdminKey').value.trim()
+        : '';
+
       if (!email || !pass) return;
 
       try {
-        const res = await CrisisAuth.signIn(email, pass);
+        const res = await CrisisAuth.signIn(email, pass, adminKey);
         if (res.success) {
           if (authModal) authModal.classList.remove('active');
           signInForm.reset();
+          if (res.user && res.user.role === 'admin') {
+            showAdaptiveToast('🛡️ Welcome, Command Admin! Official broadcast capabilities unlocked.', 'high');
+          }
         }
       } catch (err) {
         showAuthAlert(err.message, 'error');
@@ -2165,16 +2254,27 @@ function initAuthUI() {
     });
   }
 
-  // Dynamic Emergency Role Hint & Phone Field Highlighting
+  // Dynamic Emergency Role Hint & Phone/Admin Field Highlighting
   const roleRadios = document.querySelectorAll('input[name="emergencyRole"]');
   const phoneFieldGroup = document.getElementById('phoneFieldGroup');
   const phoneLabel = document.getElementById('phoneFieldLabel');
   const phoneHint = document.getElementById('phoneFieldHint');
+  const signUpAdminKeyField = document.getElementById('signUpAdminKeyField');
 
   roleRadios.forEach(radio => {
     radio.addEventListener('change', () => {
       const selectedRole = radio.value;
-      if (selectedRole === 'medic') {
+      if (signUpAdminKeyField) {
+        signUpAdminKeyField.style.display = selectedRole === 'admin' ? 'block' : 'none';
+      }
+
+      if (selectedRole === 'admin') {
+        if (phoneLabel) phoneLabel.textContent = 'Command Phone Number (Optional for Admins)';
+        if (phoneHint) phoneHint.textContent = 'Official hotline or contact number for command communications.';
+        if (phoneFieldGroup) phoneFieldGroup.style.borderColor = 'rgba(220, 38, 38, 0.4)';
+        const adminKeyInput = document.getElementById('signUpAdminKey');
+        if (adminKeyInput) adminKeyInput.focus();
+      } else if (selectedRole === 'medic') {
         if (phoneLabel) phoneLabel.innerHTML = 'Direct Emergency Mobile Number <span style="color:#ef4444; font-weight:bold;">* (Required for Doctors)</span>';
         if (phoneHint) phoneHint.textContent = 'Trapped survivors will see this hotline and can directly Call, SMS, or WhatsApp you for medical aid.';
         if (phoneFieldGroup) phoneFieldGroup.style.borderColor = 'rgba(239, 68, 68, 0.4)';
@@ -2202,6 +2302,17 @@ function initAuthUI() {
       const roleElem = document.querySelector('input[name="emergencyRole"]:checked');
       const role = roleElem ? roleElem.value : 'survivor';
 
+      let adminKey = '';
+      if (role === 'admin') {
+        const adminKeyInput = document.getElementById('signUpAdminKey');
+        adminKey = adminKeyInput ? adminKeyInput.value.trim() : '';
+        if (!adminKey) {
+          showAuthAlert('Please enter the Unique Admin Security Key to register as Command Admin.', 'error');
+          if (adminKeyInput) adminKeyInput.focus();
+          return;
+        }
+      }
+
       if (!name || !email || !pass) return;
 
       // Require phone number for Medic and Volunteer roles so survivors can direct-contact them
@@ -2217,13 +2328,86 @@ function initAuthUI() {
       }
 
       try {
-        const res = await CrisisAuth.signUp(email, pass, name, role, phone);
+        const res = await CrisisAuth.signUp(email, pass, name, role, phone, adminKey);
         if (res.success) {
           if (authModal) authModal.classList.remove('active');
           signUpForm.reset();
+          if (role === 'admin') {
+            showAdaptiveToast('🛡️ Command Admin Identity Registered! Broadcast console unlocked.', 'high');
+          }
         }
       } catch (err) {
         showAuthAlert(err.message, 'error');
+      }
+    });
+  }
+
+  // Handle Admin Alert Broadcasting Form
+  const adminAlertForm = document.getElementById('adminAlertForm');
+  if (adminAlertForm) {
+    adminAlertForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('adminAlertTitle').value.trim();
+      const severity = document.getElementById('adminAlertSeverity').value;
+      const description = document.getElementById('adminAlertDesc').value.trim();
+      const source = document.getElementById('adminAlertSource').value.trim();
+      const sector = document.getElementById('adminAlertSector').value.trim();
+      const adminKey = typeof CrisisAuth !== 'undefined' ? CrisisAuth.getAdminKey() : '';
+
+      if (!title || !description) return;
+
+      const alertPayload = {
+        title,
+        severity,
+        description,
+        source: source || 'Disaster Management Command',
+        lat: state.userLocation ? state.userLocation.lat : 11.2750,
+        lon: state.userLocation ? state.userLocation.lon : 77.5835,
+        adminKey
+      };
+
+      try {
+        const res = await fetch('/api/disasters', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-key': adminKey
+          },
+          body: JSON.stringify(alertPayload)
+        });
+
+        if (res.ok) {
+          const savedAlert = await res.json();
+          // Prepend locally
+          state.disasters.unshift(savedAlert);
+          renderDisasterAlerts();
+
+          // Broadcast across all open browser tabs and windows in real-time
+          if (alertsChannel) {
+            alertsChannel.postMessage({ type: 'NEW_DISASTER_ALERT', alert: savedAlert });
+          }
+
+          adminAlertForm.reset();
+          showAdaptiveToast(`📢 Alert Broadcasted in Real-Time: "${escapeHtml(title)}"`, 'high');
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert('Error broadcasting alert: ' + (errData.error || res.statusText));
+        }
+      } catch (err) {
+        // Offline admin simulation: save locally and broadcast via channel
+        const localAlert = {
+          id: 'admin-local-' + Date.now(),
+          ...alertPayload,
+          pubDate: new Date().toISOString(),
+          isAdminBroadcast: true
+        };
+        state.disasters.unshift(localAlert);
+        renderDisasterAlerts();
+        if (alertsChannel) {
+          alertsChannel.postMessage({ type: 'NEW_DISASTER_ALERT', alert: localAlert });
+        }
+        adminAlertForm.reset();
+        showAdaptiveToast(`📢 Alert Broadcasted & Queued Locally: "${escapeHtml(title)}"`, 'high');
       }
     });
   }
@@ -2251,19 +2435,34 @@ function showAuthAlert(msg, type = 'error') {
 
 function renderUserHeader(user) {
   const container = document.getElementById('authHeaderContainer');
-  if (!container) return;
+  const adminComposer = document.getElementById('adminAlertComposerCard');
+  const adminBadge = document.getElementById('adminActiveBadge');
+  const alertsSubtext = document.getElementById('alertsHeaderSubtext');
 
   if (user) {
     const roleUpper = (user.role || 'SURVIVOR').toUpperCase();
     const phoneDisplay = user.phone ? `<span style="font-size:0.75rem; color:#94a3b8; margin-left:4px; font-weight:500;">📞 ${escapeHtml(user.phone)}</span>` : '';
-    container.innerHTML = `
-      <div class="user-profile-chip">
-        <span class="user-callsign">👤 ${escapeHtml(user.displayName || user.email.split('@')[0])}</span>
-        ${phoneDisplay}
-        <span class="user-role-badge ${user.role || 'survivor'}">${roleUpper}</span>
-        <button class="btn-logout" id="btnLogout" title="Sign Out">⎋</button>
-      </div>
-    `;
+    const isAdmin = user.role === 'admin';
+
+    if (container) {
+      container.innerHTML = `
+        <div class="user-profile-chip">
+          <span class="user-callsign">👤 ${escapeHtml(user.displayName || user.email.split('@')[0])}</span>
+          ${phoneDisplay}
+          <span class="user-role-badge ${user.role || 'survivor'}">${isAdmin ? '🛡️ ADMIN' : roleUpper}</span>
+          <button class="btn-logout" id="btnLogout" title="Sign Out">⎋</button>
+        </div>
+      `;
+    }
+
+    // Toggle Admin Alert Composer visibility
+    if (adminComposer) adminComposer.style.display = isAdmin ? 'block' : 'none';
+    if (adminBadge) adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
+    if (alertsSubtext) {
+      alertsSubtext.textContent = isAdmin
+        ? 'Command Authorization Active: Real-time broadcast pushed across all survivor grids'
+        : 'Real-time hazard notifications synchronized via Official Command & GDACS';
+    }
 
     // Auto-fill author in Community Composer
     const authorInput = document.getElementById('authorInput');
@@ -2271,12 +2470,22 @@ function renderUserHeader(user) {
       authorInput.value = `${user.displayName || 'Responder'} (${roleUpper})`;
     }
   } else {
-    container.innerHTML = `
-      <button class="btn-action-icon" id="btnOpenAuthModal" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;">
-        👤 <span class="hide-mobile">SIGN IN</span>
-      </button>
-    `;
+    if (container) {
+      container.innerHTML = `
+        <button class="btn-action-icon" id="btnOpenAuthModal" style="border-color:var(--border-color); color:var(--text-accent);">
+          👤 <span class="hide-mobile">SIGN IN</span>
+        </button>
+      `;
+    }
+    if (adminComposer) adminComposer.style.display = 'none';
+    if (adminBadge) adminBadge.style.display = 'none';
+    if (alertsSubtext) {
+      alertsSubtext.textContent = 'Real-time hazard notifications synchronized via Official Command & GDACS';
+    }
   }
+
+  // Re-render alerts to show/hide admin action buttons
+  renderDisasterAlerts();
 }
 
 // =========================================================

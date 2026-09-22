@@ -85,7 +85,27 @@ const CrisisAuth = {
     });
   },
 
-  async signUp(email, password, displayName, role = 'survivor', phone = '') {
+  MASTER_ADMIN_KEY: 'CRISIS-ADMIN-2024',
+
+  isAdmin() {
+    return Boolean(this.currentUser && this.currentUser.role === 'admin');
+  },
+
+  getAdminKey() {
+    if (this.currentUser && this.currentUser.adminKey) return this.currentUser.adminKey;
+    return localStorage.getItem('crisis_admin_key') || '';
+  },
+
+  async signUp(email, password, displayName, role = 'survivor', phone = '', adminKey = '') {
+    // Validate Admin Security Key if requesting Admin privileges
+    if (role === 'admin') {
+      const cleanKey = (adminKey || '').trim();
+      if (!cleanKey || cleanKey !== this.MASTER_ADMIN_KEY) {
+        throw new Error('⛔ Access Denied: Invalid Admin Security Key. Official personnel only.');
+      }
+      localStorage.setItem('crisis_admin_key', cleanKey);
+    }
+
     // Live Firebase Auth attempt
     if (this.auth) {
       try {
@@ -98,6 +118,7 @@ const CrisisAuth = {
           displayName,
           role,
           phone: phone || '',
+          adminKey: role === 'admin' ? adminKey.trim() : null,
           createdAt: new Date().toISOString()
         };
 
@@ -106,11 +127,11 @@ const CrisisAuth = {
           await this.db.collection('users').doc(cred.user.uid).set(profile, { merge: true });
         }
         localStorage.setItem('crisis_user_profile', JSON.stringify(profile));
+        localStorage.setItem('crisis_current_user', JSON.stringify(profile));
         this.currentUser = profile;
         this.notifyListeners();
         return { success: true, user: profile };
       } catch (err) {
-        // If demo credentials or network down, save to local offline user registry
         console.warn('[CrisisAuth] Remote signup error, creating local emergency account:', err.message);
       }
     }
@@ -122,6 +143,7 @@ const CrisisAuth = {
       displayName: displayName || email.split('@')[0],
       role: role || 'survivor',
       phone: phone || '',
+      adminKey: role === 'admin' ? adminKey.trim() : null,
       createdAt: new Date().toISOString()
     };
     localStorage.setItem('crisis_current_user', JSON.stringify(profile));
@@ -131,7 +153,16 @@ const CrisisAuth = {
     return { success: true, user: profile };
   },
 
-  async signIn(email, password) {
+  async signIn(email, password, adminKey = '') {
+    // If admin key is provided, validate it
+    const cleanAdminKey = (adminKey || '').trim();
+    if (cleanAdminKey && cleanAdminKey !== this.MASTER_ADMIN_KEY) {
+      throw new Error('⛔ Access Denied: Invalid Admin Security Key.');
+    }
+    if (cleanAdminKey === this.MASTER_ADMIN_KEY) {
+      localStorage.setItem('crisis_admin_key', cleanAdminKey);
+    }
+
     if (this.auth) {
       try {
         const cred = await this.auth.signInWithEmailAndPassword(email, password);
@@ -145,12 +176,14 @@ const CrisisAuth = {
           }
         }
 
+        const effectiveRole = cleanAdminKey === this.MASTER_ADMIN_KEY ? 'admin' : (profile.role || 'survivor');
         const user = {
           uid: cred.user.uid,
           email: cred.user.email,
           displayName: cred.user.displayName || profile.displayName || email.split('@')[0],
-          role: profile.role || 'survivor',
-          phone: profile.phone || ''
+          role: effectiveRole,
+          phone: profile.phone || '',
+          adminKey: effectiveRole === 'admin' ? this.MASTER_ADMIN_KEY : null
         };
         localStorage.setItem('crisis_current_user', JSON.stringify(user));
         this.currentUser = user;
@@ -164,6 +197,10 @@ const CrisisAuth = {
     // Local signin fallback
     const saved = JSON.parse(localStorage.getItem('crisis_user_profile') || 'null');
     if (saved && saved.email === email) {
+      if (cleanAdminKey === this.MASTER_ADMIN_KEY) {
+        saved.role = 'admin';
+        saved.adminKey = this.MASTER_ADMIN_KEY;
+      }
       this.currentUser = saved;
       localStorage.setItem('crisis_current_user', JSON.stringify(saved));
       this.notifyListeners();
@@ -171,12 +208,14 @@ const CrisisAuth = {
     }
 
     // Generate local verified session
+    const effectiveRole = cleanAdminKey === this.MASTER_ADMIN_KEY ? 'admin' : 'survivor';
     const fallbackUser = {
       uid: 'user_' + Date.now(),
       email,
       displayName: email.split('@')[0],
-      role: 'survivor',
-      phone: ''
+      role: effectiveRole,
+      phone: '',
+      adminKey: effectiveRole === 'admin' ? this.MASTER_ADMIN_KEY : null
     };
     localStorage.setItem('crisis_current_user', JSON.stringify(fallbackUser));
     this.currentUser = fallbackUser;

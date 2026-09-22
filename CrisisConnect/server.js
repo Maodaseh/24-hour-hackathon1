@@ -239,8 +239,26 @@ const fallbackDisasters = [
   }
 ];
 
-// 1. API Endpoint: Fetch Live Disaster Data (GDACS RSS with graceful fallback)
+const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || 'CRISIS-ADMIN-2024';
+
+// Active Admin-Broadcast Disaster Bulletins
+let adminDisasters = [
+  {
+    id: 'admin-broadcast-init',
+    title: 'RED ALERT: Flash Flood Emergency & Dam Inflow Warning',
+    description: 'Rapidly rising water levels in River Basin. Immediate evacuation advised for zones A and B. Follow primary evacuation corridors to designated relief centers.',
+    severity: 'Red',
+    source: 'District Disaster Management Command (Verified Admin)',
+    pubDate: new Date().toISOString(),
+    lat: 11.2750,
+    lon: 77.5835,
+    isAdminBroadcast: true
+  }
+];
+
+// 1. API Endpoint: Fetch Live Disaster Data (Admin broadcasts prioritized + GDACS/fallback)
 app.get('/api/disasters', async (req, res) => {
+  let feedDisasters = [];
   try {
     const feedPromise = parser.parseURL('https://www.gdacs.org/xml/rss.xml');
     const timeoutPromise = new Promise((_, reject) => 
@@ -250,7 +268,7 @@ app.get('/api/disasters', async (req, res) => {
     const feed = await Promise.race([feedPromise, timeoutPromise]);
     
     if (feed && feed.items && feed.items.length > 0) {
-      const disasters = feed.items.slice(0, 6).map((item, idx) => {
+      feedDisasters = feed.items.slice(0, 5).map((item, idx) => {
         const title = item.title || 'Disaster Incident Report';
         let severity = 'Green';
         if (title.toLowerCase().includes('red') || title.toLowerCase().includes('severe') || title.toLowerCase().includes('earthquake')) {
@@ -265,20 +283,80 @@ app.get('/api/disasters', async (req, res) => {
           link: item.link || '#',
           description: item.contentSnippet || item.content || 'Immediate precaution and emergency awareness required.',
           pubDate: item.pubDate || new Date().toISOString(),
-          lat: item['geo:lat'] ? parseFloat(item['geo:lat']) : 37.7749 + (Math.random() * 0.04 - 0.02),
-          lon: item['geo:long'] ? parseFloat(item['geo:long']) : -122.4194 + (Math.random() * 0.04 - 0.02),
+          lat: item['geo:lat'] ? parseFloat(item['geo:lat']) : 11.2750 + (Math.random() * 0.04 - 0.02),
+          lon: item['geo:long'] ? parseFloat(item['geo:long']) : 77.5835 + (Math.random() * 0.04 - 0.02),
           severity: severity,
           source: 'GDACS Global Alert'
         };
       });
-
-      return res.json(disasters);
     }
-    
-    res.json(fallbackDisasters);
   } catch (error) {
-    // Return reliable, fast fallback data for low-bandwidth
-    res.json(fallbackDisasters);
+    feedDisasters = fallbackDisasters;
+  }
+
+  if (feedDisasters.length === 0) {
+    feedDisasters = fallbackDisasters;
+  }
+
+  // Merge Admin-broadcasted alerts first, then external/fallback
+  const allDisasters = [...adminDisasters, ...feedDisasters];
+  res.json(allDisasters);
+});
+
+// POST /api/disasters: Broadcast new emergency alert (Admin only)
+app.post('/api/disasters', (req, res) => {
+  const adminKey = req.headers['x-admin-key'] || req.body.adminKey;
+  if (!adminKey || adminKey !== ADMIN_SECRET_KEY) {
+    return res.status(403).json({ error: 'Unauthorized: Invalid Admin Security Key' });
+  }
+
+  const { title, description, severity, source, lat, lon } = req.body;
+  if (!title || !description) {
+    return res.status(400).json({ error: 'Title and description are required' });
+  }
+
+  const newAlert = {
+    id: 'admin-' + Date.now(),
+    title: title.trim(),
+    description: description.trim(),
+    severity: severity || 'Red',
+    source: source ? `${source.trim()} (Verified Command Admin)` : 'Emergency Command Authority (Verified Admin)',
+    pubDate: new Date().toISOString(),
+    lat: parseFloat(lat) || 11.2750,
+    lon: parseFloat(lon) || 77.5835,
+    isAdminBroadcast: true
+  };
+
+  adminDisasters.unshift(newAlert);
+  console.log(`[Alerts] Official Admin Emergency Alert broadcasted: "${newAlert.title}"`);
+  res.status(201).json(newAlert);
+});
+
+// DELETE /api/disasters/:id: Revoke emergency alert (Admin only)
+app.delete('/api/disasters/:id', (req, res) => {
+  const adminKey = req.headers['x-admin-key'] || req.body.adminKey || req.query.adminKey;
+  if (!adminKey || adminKey !== ADMIN_SECRET_KEY) {
+    return res.status(403).json({ error: 'Unauthorized: Invalid Admin Security Key' });
+  }
+
+  const { id } = req.params;
+  const beforeCount = adminDisasters.length;
+  adminDisasters = adminDisasters.filter(d => String(d.id) !== String(id));
+  
+  if (adminDisasters.length < beforeCount) {
+    res.json({ success: true, message: 'Alert revoked successfully', id });
+  } else {
+    res.status(404).json({ error: 'Alert not found or external bulletin' });
+  }
+});
+
+// POST /api/admin/verify: Simple endpoint to verify admin key
+app.post('/api/admin/verify', (req, res) => {
+  const key = req.body.adminKey || req.headers['x-admin-key'];
+  if (key && key === ADMIN_SECRET_KEY) {
+    res.json({ valid: true });
+  } else {
+    res.status(403).json({ valid: false, error: 'Invalid Admin Security Key' });
   }
 });
 
