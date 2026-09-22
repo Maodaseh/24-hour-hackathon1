@@ -1,5 +1,5 @@
 // CrisisConnect Service Worker: Clean, Resilient Offline Engine
-const CACHE_NAME = 'crisisconnect-v30-office';
+const CACHE_NAME = 'crisisconnect-v31-office';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

@@ -787,7 +787,7 @@ function renderMapShelterMarkers() {
     });
 
     const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${sh.lat},${sh.lon}`;
-    const callUrl = sh.contact && sh.contact.match(/\d+/) ? `tel:${sh.contact.replace(/[^\d+]/g, '')}` : null;
+    const isGoodNet = state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline' && state.adaptiveMode !== 'low';
 
     const marker = L.marker([sh.lat, sh.lon], { icon: markerIcon })
       .addTo(state.map)
@@ -796,7 +796,9 @@ function renderMapShelterMarkers() {
           <h4 style="margin:0 0 4px;font-size:13px;color:#0f172a;line-height:1.3;font-weight:800;">${escapeHtml(sh.name)}</h4>
           <p style="margin:0 0 6px;font-size:11px;color:#475569;line-height:1.4;">📍 ${escapeHtml(sh.address)}</p>
           <div style="font-size:11px;font-weight:bold;color:${isRedCross ? '#dc2626' : '#059669'};margin-bottom:6px;">Status: ${sh.status} • ${sh.capacity}</div>
-          ${callUrl ? `<a href="${callUrl}" style="display:block;margin-bottom:6px;text-align:center;padding:5px 8px;background:#059669;color:#fff;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">📞 Call Emergency (${escapeHtml(sh.contact)})</a>` : ''}
+          <button onclick="window.handleShelterEmergencyContact('${sh.id}')" style="display:block;width:100%;margin-bottom:6px;text-align:center;padding:6px 8px;background:${isGoodNet ? '#059669' : '#dc2626'};color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:bold;cursor:pointer;">
+            ${isGoodNet ? '📞 Call Hospital (' + escapeHtml(sh.contact || '108') + ')' : '🚨 Send SOS Message (' + escapeHtml(sh.contact || '108') + ')'}
+          </button>
           <div style="display:flex; gap:6px;">
             <button onclick="window.selectNavTarget('${sh.id}')" style="flex:1;padding:5px;background:#0284c7;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:11px;">Direct Radar</button>
             <a href="${gmapsUrl}" target="_blank" rel="noopener" style="flex:1;display:flex;align-items:center;justify-content:center;padding:5px;background:#1e293b;color:#38bdf8;text-decoration:none;border-radius:4px;font-weight:bold;font-size:11px;">Google Maps ↗</a>
@@ -977,6 +979,8 @@ function renderSheltersList() {
 
   document.getElementById('sheltersBadge').textContent = state.shelters.length;
   const isHigh = state.adaptiveMode === 'high';
+  // Check live network quality: online and not in low/offline mode
+  const isGoodNet = state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline' && state.adaptiveMode !== 'low';
 
   // Calculate distance for all shelters and sort nearest first
   const sortedShelters = [...state.shelters].map(sh => {
@@ -1001,7 +1005,7 @@ function renderSheltersList() {
     ` : '';
 
     const highDetails = isHigh ? `
-      <div class="high-mode-rich" style="font-size:0.8rem; color:#94a3b8; margin-bottom:8px; line-height:1.4;">
+      <div class="high-mode-rich" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:8px; line-height:1.4;">
         Verified Trauma Surgeons on Duty • Oxygen Purity 98.4% • Ambulance Entrance Clear
       </div>
     ` : '';
@@ -1021,15 +1025,19 @@ function renderSheltersList() {
             <span class="shelter-badge ${sh.status === 'OPEN' ? 'open' : 'full'}">${sh.status}</span>
           </div>
           <div class="shelter-address">📍 ${escapeHtml(sh.address)} • <strong style="color:var(--color-safe);">${sh.distance.toFixed(2)} km away</strong></div>
-          <div style="font-size:0.8rem; color:#cbd5e1; margin-bottom:8px;">Capacity: ${sh.capacity}</div>
+          <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:8px; font-weight:500;">Capacity: <strong>${escapeHtml(sh.capacity)}</strong></div>
           ${highDetails}
           ${lowSummary}
-          <div class="resources-list ${isHigh ? '' : 'rich-media-only'}">
-            ${sh.resources.map(r => `<span class="resource-tag">${r}</span>`).join('')}
+          <div class="shelter-resources resources-list ${isHigh ? '' : 'rich-media-only'}">
+            ${sh.resources.map(r => `<span class="resource-pill resource-tag">${escapeHtml(r)}</span>`).join('')}
           </div>
         </div>
         <div class="shelter-footer">
-          <span style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">${sh.contact}</span>
+          <button type="button" class="btn-shelter-emergency ${isGoodNet ? 'mode-call' : 'mode-sos'}" onclick="window.handleShelterEmergencyContact('${sh.id}')" title="${isGoodNet ? 'Call Hospital Emergency Casualty Line' : 'Send Emergency SOS Dispatch (Offline SMS + Mesh Queue)'}">
+            <span class="emergency-icon">${isGoodNet ? '📞' : '🚨'}</span>
+            <span class="emergency-label">${isGoodNet ? 'Call Line:' : 'Send SOS:'}</span>
+            <span class="emergency-phone">${escapeHtml(sh.contact || '108')}</span>
+          </button>
           <button class="btn-directions" onclick="window.selectNavTarget('${sh.id}')">
             🧭 Direct Radar
           </button>
@@ -1038,6 +1046,94 @@ function renderSheltersList() {
     `;
   }).join('');
 }
+
+// Global handler for Shelter Emergency Contact
+// When online (medium/high): calls hospital line directly
+// When offline/low: formats and dispatches emergency SOS message via SMS + queues in offline mesh
+window.handleShelterEmergencyContact = function(shelterId) {
+  const sh = (state.shelters || []).find(s => String(s.id) === String(shelterId));
+  if (!sh) return;
+
+  const rawPhone = sh.contact || '108';
+  const cleanPhone = rawPhone.replace(/[^\d+]/g, '');
+
+  // Check live network quality: online and not in low/offline mode
+  const isGoodNet = state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline' && state.adaptiveMode !== 'low';
+
+  if (isGoodNet) {
+    // 1. Medium to High Internet: Call Hospital Directly
+    showAdaptiveToast(`📞 Dialing ${escapeHtml(sh.name)} Emergency Casualty line (${rawPhone})...`, 'high');
+    const targetNumber = cleanPhone || '108';
+    window.location.href = `tel:${targetNumber}`;
+  } else {
+    // 2. Offline / 2G / Blackout Mode: Send Emergency SOS Message
+    const userLat = state.userLocation ? state.userLocation.lat.toFixed(5) : 'UNKNOWN';
+    const userLon = state.userLocation ? state.userLocation.lon.toFixed(5) : 'UNKNOWN';
+    const userCoords = `${userLat}, ${userLon}`;
+    const sector = state.userSectorName || 'Disaster Grid Area';
+    const userProfile = (typeof CrisisAuth !== 'undefined' && CrisisAuth.currentUser) ? CrisisAuth.currentUser : null;
+    const authorName = userProfile ? (userProfile.displayName || userProfile.email) : 'Survivor (Distress)';
+    const authorPhone = userProfile && userProfile.phone ? userProfile.phone : null;
+
+    const sosSmsPayload = `🚨 EMERGENCY SOS - CASUALTY DISPATCH
+DESTINATION: ${sh.name}
+FROM: ${authorName}${authorPhone ? ' (' + authorPhone + ')' : ''}
+SURVIVOR GPS: ${userCoords}
+SECTOR: ${sector}
+TIME: ${new Date().toLocaleTimeString()}
+STATUS: OFFLINE DISASTER ZONE
+URGENT: Immediate casualty aid & emergency rescue requested at current GPS coordinates!`;
+
+    // A. Auto-queue this SOS in the offline community feed & localStorage
+    const sosPost = {
+      id: Date.now(),
+      author: authorName,
+      phone: authorPhone,
+      location: sector,
+      category: 'aid',
+      text: `🚨 [EMERGENCY SOS TO ${sh.name}] Urgent casualty & ambulance aid requested! Survivor pinned at GPS: ${userCoords}`,
+      coordinates: state.userLocation ? { lat: state.userLocation.lat, lon: state.userLocation.lon } : null,
+      radiusKm: 15,
+      source: 'offline_sos_dispatch',
+      isPending: true,
+      timestamp: new Date().toISOString()
+    };
+
+    state.pendingPosts.unshift(sosPost);
+    localStorage.setItem('crisis_pending_posts', JSON.stringify(state.pendingPosts));
+    updateSyncBadge();
+    renderCommunityFeed();
+
+    // B. Target phone number for SMS: if cleanPhone is standard 10-digit mobile or emergency shortcode, use it, else fallback to 112/108
+    const smsTarget = (cleanPhone.length >= 10 && cleanPhone.startsWith('9')) || cleanPhone === '108' || cleanPhone === '112' ? cleanPhone : '112';
+
+    // C. Open SMS Modal with prepopulated payload
+    const smsModal = document.getElementById('smsModal');
+    const preview = document.getElementById('smsPayloadPreview');
+    const directLink = document.getElementById('smsDirectLaunchLink');
+    const destGateway = document.getElementById('smsDestinationGateway');
+
+    if (destGateway) {
+      destGateway.innerHTML = `${smsTarget} <span style="font-size:0.85rem; font-weight:normal; color:var(--text-secondary);">(${escapeHtml(sh.name)})</span>`;
+    }
+    if (preview) {
+      preview.textContent = sosSmsPayload;
+    }
+    if (directLink) {
+      directLink.href = `sms:${smsTarget}?&body=${encodeURIComponent(sosSmsPayload)}`;
+      directLink.textContent = `🚀 SEND EMERGENCY SOS VIA SMS (${smsTarget})`;
+    }
+    if (smsModal) {
+      smsModal.dataset.currentPayload = sosSmsPayload;
+      smsModal.classList.add('active');
+    }
+
+    // D. Direct launch native SMS composer for mobile devices
+    window.location.href = `sms:${smsTarget}?&body=${encodeURIComponent(sosSmsPayload)}`;
+
+    showAdaptiveToast(`🚨 OFFLINE SOS ACTIVATED: Dispatching emergency distress SMS to ${escapeHtml(sh.name)} (${smsTarget}) & queued in offline mesh!`, 'low');
+  }
+};
 
 function renderNearbyWaypoints() {
   const list = document.getElementById('waypointList');
