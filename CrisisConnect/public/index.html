@@ -11,7 +11,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=30">
+  <script>
+    document.documentElement.setAttribute('data-theme', 'light');
+    try {
+      localStorage.setItem('crisis_theme', 'light');
+      localStorage.setItem('crisis_theme_v2', 'light');
+      localStorage.setItem('crisis_theme_office_applied', 'true');
+    } catch(e) {}
+  </script>
   <style>
     /* Critical render fallback: hide modal overlays before stylesheet loads */
     .modal-overlay:not(.active) { display: none !important; }
@@ -21,7 +29,7 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
-<body>
+<body data-theme="light">
 
   <!-- =======================================================
        STICKY APP HEADER & EMERGENCY STATUS BAR
@@ -92,8 +100,11 @@
         </div>
       </div>
       <div class="header-actions">
+        <div class="btn-action-icon btn-theme-toggle" id="btnThemeToggle" title="Enterprise Office Theme Active" style="background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; font-weight:700;">
+          <span id="themeToggleIcon">🏢</span> <span class="hide-mobile" id="themeToggleText">OFFICE THEME</span>
+        </div>
         <div id="authHeaderContainer">
-          <button class="btn-action-icon" id="btnOpenAuthModal" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;">
+          <button class="btn-action-icon" id="btnOpenAuthModal" style="border-color:var(--border-color); color:var(--text-accent);">
             👤 <span class="hide-mobile">SIGN IN</span>
           </button>
         </div>
@@ -275,7 +286,7 @@
               <span class="community-subtext" id="communityGeofenceSubtitle">Filtered by real-time GPS distance</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <select id="feedRadiusFilter" class="form-select" style="padding:5px 8px; font-size:0.75rem; width:auto; background:#0b1120; border-color:rgba(56,189,248,0.3); color:#38bdf8; font-weight:700;">
+              <select id="feedRadiusFilter" class="form-select" style="padding:5px 8px; font-size:0.75rem; width:auto; background:var(--bg-input); border-color:var(--border-focus); color:var(--text-accent); font-weight:700;">
                 <option value="5">🎯 Within 5 km</option>
                 <option value="15" selected>📍 Within 15 km (Perundurai)</option>
                 <option value="35">🏙️ Within 35 km</option>
@@ -303,7 +314,7 @@
     <div class="modal-box">
       <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
       <h2 class="modal-title">🚨 EMERGENCY ASSISTANCE</h2>
-      <p style="font-size:0.9rem; color:#cbd5e1; margin-bottom:12px;">
+      <p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:12px;">
         Immediate dispatch lines. Cellular voice and SMS work over degraded 2G GSM bands even when data fails.
       </p>
 
@@ -340,18 +351,18 @@
     <div class="modal-box">
       <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
       <h2 class="modal-title" style="color:var(--color-warning);">📡 2G CELLULAR SMS RELAY</h2>
-      <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
+      <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">
         Cellular SMS travels over 2G voice signaling channels (SS7) and transmits even when mobile data is completely <strong>0 KB/s</strong>.
       </p>
 
       <div class="location-share-box" style="margin-bottom:12px; text-align:left;">
         <strong>DESTINATION EMERGENCY GATEWAY:</strong><br>
-        <span style="font-family:var(--font-mono); font-size:1.1rem; color:var(--color-primary); font-weight:bold;">112</span> (National Disaster & Emergency Response)
+        <span style="font-family:var(--font-mono); font-size:1.1rem; color:var(--color-accent); font-weight:bold;">112</span> (National Disaster & Emergency Response)
       </div>
 
       <div class="sms-preview-box">
         <label class="form-label" style="margin-bottom:4px; font-size:0.75rem;">STANDARDIZED SMS PAYLOAD:</label>
-        <pre id="smsPayloadPreview" class="code-preview" style="background:#0f172a; padding:10px; border-radius:6px; font-size:0.8rem; color:#38bdf8; white-space:pre-wrap; border:1px solid #334155; margin:0;"></pre>
+        <pre id="smsPayloadPreview" class="code-preview" style="background:var(--bg-input); padding:10px; border-radius:6px; font-size:0.8rem; color:var(--text-accent); white-space:pre-wrap; border:1px solid var(--border-color); margin:0;"></pre>
       </div>
 
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;">
@@ -374,8 +385,8 @@
   <div class="modal-overlay" id="qrRelayModal">
     <div class="modal-box" style="text-align:center; max-width:440px;">
       <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
-      <h2 class="modal-title" style="color:#38bdf8;">📲 OFFLINE QR SNEAKERNET RELAY</h2>
-      <p style="font-size:0.82rem; color:#cbd5e1; margin-bottom:12px;">
+      <h2 class="modal-title" style="color:var(--color-accent);">📲 OFFLINE QR SNEAKERNET RELAY</h2>
+      <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">
         Zero-RF visual mesh handoff. Passing volunteers or rescue runners can scan this QR code with their camera to carry and relay your distress report.
       </p>
 
@@ -385,7 +396,7 @@
 
       <div class="location-share-box" style="text-align:left; font-size:0.75rem; word-break:break-all;">
         <strong>COMPACT MESH PACKET:</strong><br>
-        <span id="qrPacketText" style="font-family:var(--font-mono); color:#94a3b8;">Generating...</span>
+        <span id="qrPacketText" style="font-family:var(--font-mono); color:var(--text-secondary);">Generating...</span>
       </div>
 
       <div style="display:flex; gap:8px; margin-top:12px;">
@@ -405,8 +416,8 @@
   <div class="modal-overlay" id="ingestModal">
     <div class="modal-box">
       <button type="button" class="modal-close-icon" onclick="window.closeAllModals()" title="Close">&times;</button>
-      <h2 class="modal-title" style="color:#10b981;">📥 INGEST FIELD REPORT</h2>
-      <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
+      <h2 class="modal-title" style="color:var(--color-safe);">📥 INGEST FIELD REPORT</h2>
+      <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">
         Paste a survivor's distress packet (from QR scan or SMS). CrisisConnect will ingest it into your device and auto-upload it to the cloud grid once you reach network coverage.
       </p>
 
@@ -416,7 +427,7 @@
       </div>
 
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
-        <button type="button" class="btn-broadcast" id="btnProcessIngest" style="background:#10b981; color:#000; font-weight:700;">
+        <button type="button" class="btn-broadcast" id="btnProcessIngest" style="background:var(--color-safe-gradient); color:#ffffff; font-weight:700;">
           ✅ INGEST & RELAY REPORT
         </button>
         <button type="button" class="btn-close-modal" id="btnCloseIngestModal">
@@ -432,10 +443,10 @@
   <div class="modal-overlay" id="authModal">
     <div class="modal-box" style="max-width:440px;">
       <button type="button" class="modal-close-icon" id="btnCloseAuthModalTop" onclick="window.closeAllModals()" title="Close">&times;</button>
-      <h2 class="modal-title" style="color:#38bdf8; font-size:1.25rem;">
+      <h2 class="modal-title" style="color:var(--color-accent); font-size:1.25rem;">
         <span>🔐 EMERGENCY CLOUD ACCESS</span>
       </h2>
-      <p style="font-size:0.8rem; color:#cbd5e1; margin-bottom:14px;">
+      <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:14px;">
         Cloud-synchronized identity with automatic local offline caching. Works across all devices and during network blackouts.
       </p>
 
@@ -495,17 +506,17 @@
         </div>
 
         <!-- Dedicated Emergency Phone Field with High-Visibility Container -->
-        <div class="form-group" id="phoneFieldGroup" style="background:rgba(30,58,138,0.25); border:1.5px solid rgba(56,189,248,0.45); border-radius:8px; padding:12px; margin-bottom:14px;">
+        <div class="form-group" id="phoneFieldGroup" style="background:var(--color-accent-bg, rgba(14,165,233,0.12)); border:1.5px solid var(--border-active); border-radius:8px; padding:12px; margin-bottom:14px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <label class="form-label" for="signUpPhone" id="phoneFieldLabel" style="margin:0; font-weight:700; color:#38bdf8; font-size:0.85rem;">
+            <label class="form-label" for="signUpPhone" id="phoneFieldLabel" style="margin:0; font-weight:700; color:var(--text-accent); font-size:0.85rem;">
               📞 Direct Emergency Mobile Number
             </label>
-            <span id="phoneNoticeBadge" style="font-size:0.68rem; font-family:var(--font-mono); color:#f59e0b; background:rgba(245,158,11,0.18); padding:2px 7px; border-radius:4px; border:1px solid rgba(245,158,11,0.4); font-weight:600;">
+            <span id="phoneNoticeBadge" style="font-size:0.68rem; font-family:var(--font-mono); color:var(--color-warning); background:var(--color-warning-bg); padding:2px 7px; border-radius:4px; border:1px solid var(--color-warning-border); font-weight:600;">
               ⚠️ Visible to Survivors
             </span>
           </div>
-          <input type="tel" id="signUpPhone" class="form-input" placeholder="e.g. +91 94432 11099 (Hotline for survivors)" style="border-color:rgba(56,189,248,0.5); font-size:0.95rem; background:rgba(15,23,42,0.9);">
-          <span id="phoneFieldHint" style="font-size:0.72rem; color:#94a3b8; display:block; margin-top:5px; line-height:1.35;">
+          <input type="tel" id="signUpPhone" class="form-input" placeholder="e.g. +91 94432 11099 (Hotline for survivors)" style="font-size:0.95rem;">
+          <span id="phoneFieldHint" style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:5px; line-height:1.35;">
             Survivors in disaster zones will see 1-tap 📞 Call, 💬 SMS, and 🟢 WhatsApp buttons to reach you.
           </span>
         </div>
@@ -545,6 +556,6 @@
 
   <!-- Offline QR Engine & Client-Side App Logic -->
   <script src="/qrcode.bundle.js"></script>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=30"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // CrisisConnect Service Worker: Clean, Resilient Offline Engine
-const CACHE_NAME = 'crisisconnect-v15';
+const CACHE_NAME = 'crisisconnect-v30-office';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -47,8 +47,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // A. API Requests
+  // A. API Requests: NEVER intercept POST / PUT / DELETE mutation requests!
+  // Let mutations hit network or reject cleanly so client offline queue handles them
   if (url.pathname.startsWith('/api/')) {
+    if (event.request.method !== 'GET') {
+      return; // Direct network passthrough for all mutation requests
+    }
+
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         try {
@@ -60,49 +65,53 @@ self.addEventListener('fetch', (event) => {
         } catch (err) {
           const cached = await cache.match(event.request);
           if (cached) return cached;
-          return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
+          return new Response(JSON.stringify([]), { 
+            status: 503, 
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'application/json' } 
+          });
         }
       })
     );
     return;
   }
 
-  // B. CSS Stylesheets: STRICT text/css response only
+  // B. CSS Stylesheets: Network first with cache fallback
   if (url.pathname.endsWith('.css')) {
     event.respondWith(
-      caches.match(url.pathname).then(async (cached) => {
-        if (cached) return cached;
-        try {
-          const networkRes = await fetch(event.request);
+      fetch(event.request, { cache: 'no-cache' })
+        .then((networkRes) => {
           if (networkRes && networkRes.ok) {
             const copy = networkRes.clone();
             caches.open(CACHE_NAME).then(c => c.put(url.pathname, copy));
           }
           return networkRes;
-        } catch (err) {
+        })
+        .catch(async () => {
+          const cached = await caches.match(url.pathname);
+          if (cached) return cached;
           return new Response('/* Offline CSS Fallback */', { headers: { 'Content-Type': 'text/css' } });
-        }
-      })
+        })
     );
     return;
   }
 
-  // C. JavaScript Scripts: STRICT application/javascript response only
+  // C. JavaScript Scripts: Network first with cache fallback
   if (url.pathname.endsWith('.js')) {
     event.respondWith(
-      caches.match(url.pathname).then(async (cached) => {
-        if (cached) return cached;
-        try {
-          const networkRes = await fetch(event.request);
+      fetch(event.request, { cache: 'no-cache' })
+        .then((networkRes) => {
           if (networkRes && networkRes.ok) {
             const copy = networkRes.clone();
             caches.open(CACHE_NAME).then(c => c.put(url.pathname, copy));
           }
           return networkRes;
-        } catch (err) {
+        })
+        .catch(async () => {
+          const cached = await caches.match(url.pathname);
+          if (cached) return cached;
           return new Response('console.warn("Offline script fallback");', { headers: { 'Content-Type': 'application/javascript' } });
-        }
-      })
+        })
     );
     return;
   }
