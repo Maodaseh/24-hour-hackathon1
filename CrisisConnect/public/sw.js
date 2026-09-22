@@ -1,5 +1,5 @@
 // CrisisConnect Service Worker: Offline-First Crisis Grid
-const CACHE_NAME = 'crisisconnect-v9';
+const CACHE_NAME = 'crisisconnect-v10';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
