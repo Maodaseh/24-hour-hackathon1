@@ -11,7 +11,7 @@ const state = {
   isOnline: navigator.onLine,
   shelters: [],
   disasters: [],
-  communityPosts: [],
+  communityPosts: JSON.parse(localStorage.getItem('crisis_persistent_community_posts') || '[]'),
   selectedTargetShelter: null,
   pendingPosts: JSON.parse(localStorage.getItem('crisis_pending_posts') || '[]'),
   map: null,
@@ -806,11 +806,33 @@ async function fetchCommunityPosts(silent = false) {
     const res = await fetch('/api/community');
     if (res.ok) {
       const incoming = await res.json();
+
+      // 1. Additive CRDT Union: Merge incoming posts into existing posts (NEVER drop any post)
+      const postMap = new Map();
+      // Keep all locally known posts
+      state.communityPosts.forEach(p => { if (p && p.id) postMap.set(String(p.id), p); });
+      // Add all incoming server posts
+      if (Array.isArray(incoming)) {
+        incoming.forEach(p => { if (p && p.id) postMap.set(String(p.id), p); });
+      }
+
+      const merged = Array.from(postMap.values()).sort((a, b) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+
       const prevIds = state.communityPosts.map(p => p.id).join(',');
-      const newIds = incoming.map(p => p.id).join(',');
-      state.communityPosts = incoming;
+      const mergedIds = merged.map(p => p.id).join(',');
+
+      state.communityPosts = merged;
+      localStorage.setItem('crisis_persistent_community_posts', JSON.stringify(merged));
+
+      // 2. Opportunistic Server Synchronization: Propagate posts to Vercel lambdas
+      if (Array.isArray(incoming) && merged.length > incoming.length) {
+        syncPostsToServer(merged);
+      }
+
       // Re-render if feed changed or on initial load
-      if (!silent || prevIds !== newIds) {
+      if (!silent || prevIds !== mergedIds) {
         renderCommunityFeed();
       }
     }
@@ -820,6 +842,17 @@ async function fetchCommunityPosts(silent = false) {
       renderCommunityFeed();
     }
   }
+}
+
+// Background sync helper to propagate missing posts across Vercel serverless lambdas
+async function syncPostsToServer(posts) {
+  try {
+    await fetch('/api/community/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ posts })
+    });
+  } catch (e) {}
 }
 
 // Auto-refresh community feed every 2.5 seconds so all persons see incoming broadcasts live

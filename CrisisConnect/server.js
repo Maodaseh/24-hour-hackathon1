@@ -279,6 +279,24 @@ app.post('/api/community', (req, res) => {
   }
 });
 
+// Cross-Lambda State Synchronization for Serverless Hosting (Vercel)
+app.post('/api/community/sync', (req, res) => {
+  const { posts } = req.body;
+  if (Array.isArray(posts) && posts.length > 0) {
+    const postMap = new Map();
+    communityPosts.forEach(p => postMap.set(String(p.id), p));
+    posts.forEach(p => {
+      if (p && p.id && p.text) {
+        postMap.set(String(p.id), p);
+      }
+    });
+    communityPosts = Array.from(postMap.values())
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 100);
+  }
+  res.json(communityPosts);
+});
+
 // 4. API Endpoint: Emergency QR Generator
 app.get('/api/qr', async (req, res) => {
   const text = req.query.text;
