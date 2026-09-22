@@ -1337,6 +1337,37 @@ body:not(.mode-survivor-2g) .high-mode-rich {
   border: 1px solid var(--color-warning-border);
 }
 
+.post-distance-badge {
+  background: rgba(14, 165, 233, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.post-distance-badge.near {
+  background: var(--color-safe-bg);
+  color: #34d399;
+  border-color: var(--color-safe-border);
+}
+
+.post-radius-badge {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.64rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+}
+
 /* =========================================================
    EMERGENCY MODALS (SOS, SMS Relay, QR Sneakernet)
    ========================================================= */

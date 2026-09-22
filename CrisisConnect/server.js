@@ -30,30 +30,36 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// In-memory "Community" database for the prototype
+// In-memory "Community" database for the prototype (localized around Perundurai / Erode sector)
 let communityPosts = [
   { 
     id: 1, 
     author: 'Rescue_Team_Alpha', 
-    text: 'Evacuation buses staging at St. Jude High School. Medical supplies and clean drinking water available.', 
-    location: 'Sector 4 - North Ridge',
+    text: 'Evacuation buses staging at Perundurai Govt Boys Higher Secondary School. Medical supplies and clean drinking water available.', 
+    location: 'Perundurai Town Center (Bypass Rd)',
     category: 'aid',
+    coordinates: { lat: 11.2750, lon: 77.5835 },
+    radiusKm: 15,
     timestamp: new Date(Date.now() - 25 * 60000).toISOString() 
   },
   { 
     id: 2, 
     author: 'Jane_D_Citizen', 
-    text: 'Warning: Bridge on 5th Avenue is impassable due to rising flash flood waters. Do not attempt to cross.', 
-    location: '5th Ave & Pine St',
+    text: 'Warning: Water stagnation near Chennimalai Road underpass is impassable due to rising flash flood waters. Use Old Ring Road.', 
+    location: 'Chennimalai Rd & 4-Roads Junction',
     category: 'hazard',
+    coordinates: { lat: 11.2780, lon: 77.5890 },
+    radiusKm: 15,
     timestamp: new Date(Date.now() - 12 * 60000).toISOString() 
   },
   { 
     id: 3, 
     author: 'RedCross_Logistics', 
-    text: 'Mobile water purification unit operational at Memorial Park Pavilion.', 
-    location: 'Memorial Park South Gate',
+    text: 'Mobile emergency oxygen and water purification unit operational at Perundurai Bus Stand Shelter.', 
+    location: 'Perundurai Central Terminal',
     category: 'water',
+    coordinates: { lat: 11.2720, lon: 77.5810 },
+    radiusKm: 25,
     timestamp: new Date(Date.now() - 5 * 60000).toISOString() 
   }
 ];
@@ -243,15 +249,16 @@ app.get('/api/community', (req, res) => {
 });
 
 app.post('/api/community', (req, res) => {
-  const { author, text, location, category, source, relayed, coordinates } = req.body;
+  const { author, text, location, category, source, relayed, coordinates, radiusKm } = req.body;
   if (text && text.trim()) {
     const newPost = {
       id: Date.now(),
       author: (author && author.trim()) ? author.trim() : 'Survivor_Signal',
       text: text.trim(),
-      location: (location && location.trim()) ? location.trim() : 'Local Area',
+      location: (location && location.trim()) ? location.trim() : 'Perundurai Sector',
       category: category || 'aid',
       coordinates: coordinates || null,
+      radiusKm: radiusKm ? parseFloat(radiusKm) : 15,
       source: source || 'direct',
       relayed: !!relayed,
       timestamp: new Date().toISOString()

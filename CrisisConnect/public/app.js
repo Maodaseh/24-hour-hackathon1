@@ -224,6 +224,9 @@ function initGeolocation() {
 
         document.getElementById('gpsLockStatus').textContent = 'GPS LOCKED';
 
+        // Automatically resolve disaster sector name & auto-fill community input
+        autoResolveSectorLocation(pos.coords.latitude, pos.coords.longitude);
+
         // 1. Clear any old route line and center map smoothly on user's real location
         if (state.activePolyline && state.map) {
           state.map.removeLayer(state.activePolyline);
@@ -237,17 +240,66 @@ function initGeolocation() {
 
         // 2. Fetch real live hospitals via Google Places API (or offline fallback)
         fetchShelters(state.userLocation.lat, state.userLocation.lon);
+
+        // 3. Update community feed with real-time distance calculations
+        renderCommunityFeed();
       },
       (err) => {
         console.warn('[Geolocation] Unable to acquire location:', err.message);
         document.getElementById('gpsLockStatus').textContent = 'DEFAULT MOCK GPS';
         coordsDisplay.textContent = '37.77490, -122.41940';
         sosCoords.textContent = '37.77490, -122.41940 (Mock Grid Fallback)';
+        autoResolveSectorLocation(state.userLocation.lat, state.userLocation.lon);
         localizeSheltersAroundUser(state.userLocation.lat, state.userLocation.lon);
         updateNearestShelterRadar();
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
+  }
+}
+
+// Automatically resolve sector name from GPS coordinates (Offline-First)
+async function autoResolveSectorLocation(lat, lon) {
+  const locInput = document.getElementById('locationInput');
+  const badge = document.getElementById('gpsAutoLockBadge');
+  if (badge) {
+    badge.innerHTML = `<span class="pulse-dot" style="width:5px; height:5px;"></span> GPS LOCKED (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+  }
+
+  // Determine local disaster sector name based on GPS bounding boxes
+  let sectorName = '';
+  if (lat >= 11.1 && lat <= 11.45 && lon >= 77.45 && lon <= 77.75) {
+    sectorName = 'Perundurai Central Sector (Erode District)';
+  } else if (lat >= 10.8 && lat <= 11.15 && lon >= 77.1 && lon <= 77.4) {
+    sectorName = 'Palladam / Tiruppur Sector';
+  } else {
+    sectorName = `Disaster Grid Sector (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+  }
+
+  state.userSectorName = sectorName;
+
+  // Auto-fill input if empty or default
+  if (locInput && (!locInput.value || locInput.value === 'Acquiring GPS location...' || locInput.value.includes('Disaster Grid') || locInput.value.includes('Perundurai') || locInput.value.includes('Palladam'))) {
+    locInput.value = sectorName;
+  }
+
+  // Also try lightweight reverse geocoding via OpenStreetMap when online
+  if (navigator.onLine && !state._geocodedOnce) {
+    state._geocodedOnce = true;
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const data = await res.json();
+        const city = data.address.town || data.address.city || data.address.suburb || data.address.village;
+        if (city) {
+          const refinedName = `${city} Disaster Sector (${data.address.county || 'Local Area'})`;
+          state.userSectorName = refinedName;
+          if (locInput) locInput.value = refinedName;
+        }
+      }
+    } catch (e) {
+      // Offline fallback silent
+    }
   }
 }
 
@@ -753,14 +805,70 @@ function renderCommunityFeed() {
   const allPosts = [...state.pendingPosts, ...state.communityPosts];
   document.getElementById('communityBadge').textContent = allPosts.length;
 
-  if (allPosts.length === 0) {
-    container.innerHTML = '<div style="color:var(--text-secondary); padding:20px; text-align:center;">No community reports yet. Be the first to broadcast from your sector.</div>';
+  const filterSelect = document.getElementById('feedRadiusFilter');
+  const maxFeedRadius = filterSelect ? parseFloat(filterSelect.value) : 15;
+
+  const userLat = state.userLocation.lat;
+  const userLon = state.userLocation.lon;
+
+  // 1. Calculate Haversine distance from current user GPS to each post
+  const processedPosts = allPosts.map(post => {
+    let distKm = null;
+    if (post.coordinates && typeof post.coordinates.lat === 'number' && typeof post.coordinates.lon === 'number') {
+      distKm = calculateDistance(userLat, userLon, post.coordinates.lat, post.coordinates.lon);
+    }
+    return { ...post, distanceKm: distKm };
+  });
+
+  // 2. Apply Geofenced Disaster Radius Filter
+  const filteredPosts = processedPosts.filter(post => {
+    // Always show user's own/pending posts
+    if (post.isPending) return true;
+    if (maxFeedRadius >= 9000) return true; // Global / All sectors mode
+    if (post.distanceKm === null) return true; // Fallback if no GPS tag
+    // Filter within selected feed radius
+    return post.distanceKm <= maxFeedRadius;
+  });
+
+  // Update header subtitle
+  const subTitle = document.getElementById('communityGeofenceSubtitle');
+  if (subTitle) {
+    if (maxFeedRadius >= 9000) {
+      subTitle.textContent = `Showing all regional disaster reports (${filteredPosts.length} total)`;
+    } else {
+      const sectorLabel = state.userSectorName ? ` (${state.userSectorName.split('(')[0].trim()})` : '';
+      subTitle.textContent = `Showing ${filteredPosts.length} alerts within ${maxFeedRadius} km of you${sectorLabel}`;
+    }
+  }
+
+  if (filteredPosts.length === 0) {
+    container.innerHTML = `
+      <div style="color:var(--text-secondary); padding:28px 16px; text-align:center;">
+        <p style="font-weight:700; margin-bottom:6px; color:#f8fafc; font-size:0.95rem;">No alerts within ${maxFeedRadius} km of your GPS location.</p>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">You can expand the filter above to "Within 35 km" or "All Sectors" to see broader reports.</p>
+      </div>
+    `;
     return;
   }
 
-  container.innerHTML = allPosts.map(post => {
+  container.innerHTML = filteredPosts.map(post => {
     const isRelayed = post.relayed || post.source === 'mesh_qr';
     const isSms = post.source === 'sms_relay';
+
+    let distText = '📍 Sector Match';
+    let isNear = false;
+    if (post.distanceKm !== null) {
+      if (post.distanceKm < 1) {
+        distText = `📍 ${Math.round(post.distanceKm * 1000)} m away`;
+        isNear = true;
+      } else {
+        distText = `📍 ${post.distanceKm.toFixed(1)} km away`;
+        isNear = post.distanceKm <= 5;
+      }
+    }
+
+    const scopeText = post.radiusKm && post.radiusKm < 9000 ? `🎯 ${post.radiusKm}km Geofence` : '🌐 Regional Grid';
+
     return `
       <div class="post-card" id="post-${post.id}">
         <div class="post-top">
@@ -769,12 +877,14 @@ function renderCommunityFeed() {
             ${post.isPending ? '<span style="font-size:0.7rem; background:#92400e; color:#fef3c7; padding:2px 6px; border-radius:4px; font-weight:bold;">OFFLINE QUEUED</span>' : ''}
             ${isRelayed ? '<span class="mesh-badge relayed">MESH RELAYED</span>' : ''}
             ${isSms ? '<span class="mesh-badge sms">2G SMS</span>' : ''}
+            <span class="post-distance-badge ${isNear ? 'near' : ''}">${distText}</span>
+            <span class="post-radius-badge">${scopeText}</span>
           </div>
           <span class="post-tag ${post.category || 'aid'}">${(post.category || 'AID').toUpperCase()}</span>
         </div>
         <div class="post-text">${escapeHtml(post.text)}</div>
         <div class="post-footer">
-          <span>📍 ${escapeHtml(post.location || 'Unknown')}</span>
+          <span>📍 ${escapeHtml(post.location || 'Local Disaster Sector')}</span>
           <span>${new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
         <div class="post-action-row">
@@ -803,13 +913,15 @@ function escapeHtml(str) {
 
 // Format compact packet string for QR mesh and SMS
 function formatPostEmergencyPayload(post) {
-  const coords = post.coordinates || (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
-  return `CC#${(post.category || 'AID').toUpperCase()}|CALL:${post.author || 'Survivor'}|GPS:${coords}|LOC:${post.location || 'Local'}|MSG:${post.text.replace(/[\r\n]+/g, ' ')}`;
+  const coords = post.coordinates ? `${post.coordinates.lat.toFixed(5)},${post.coordinates.lon.toFixed(5)}` : (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
+  const rad = post.radiusKm || 15;
+  return `CC#${(post.category || 'AID').toUpperCase()}|CALL:${post.author || 'Survivor'}|GPS:${coords}|RAD:${rad}km|LOC:${post.location || 'Local'}|MSG:${post.text.replace(/[\r\n]+/g, ' ')}`;
 }
 
 function formatSmsText(post) {
-  const coords = post.coordinates || (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
-  return `CRISISCONNECT EMERGENCY RELAY\nCAT: ${(post.category || 'AID').toUpperCase()}\nFROM: ${post.author || 'Survivor'}\nGPS: ${coords}\nLOC: ${post.location || 'Local'}\nMSG: ${post.text}`;
+  const coords = post.coordinates ? `${post.coordinates.lat.toFixed(5)},${post.coordinates.lon.toFixed(5)}` : (state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : 'UNKNOWN');
+  const rad = post.radiusKm || 15;
+  return `CRISISCONNECT EMERGENCY RELAY\nCAT: ${(post.category || 'AID').toUpperCase()}\nFROM: ${post.author || 'Survivor'}\nGPS: ${coords}\nGEOFENCE: ${rad} km\nLOC: ${post.location || 'Local'}\nMSG: ${post.text}`;
 }
 
 // Find post by ID from state
@@ -967,10 +1079,12 @@ if (communityForm) {
     const location = document.getElementById('locationInput').value.trim();
     const category = document.getElementById('categorySelect').value;
     const text = document.getElementById('textInput').value.trim();
+    const radiusElem = document.getElementById('broadcastRadiusSelect');
+    const radiusKm = radiusElem ? parseFloat(radiusElem.value) : 15;
 
     if (!text) return;
 
-    const coords = state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : null;
+    const coords = state.userLocation ? { lat: state.userLocation.lat, lon: state.userLocation.lon } : null;
 
     const postPayload = {
       id: Date.now(),
@@ -979,6 +1093,7 @@ if (communityForm) {
       category,
       text,
       coordinates: coords,
+      radiusKm: radiusKm,
       source: 'pwa_sync',
       timestamp: new Date().toISOString()
     };
@@ -1031,6 +1146,10 @@ function restoreComposerAuthor() {
     const input = document.getElementById('authorInput');
     if (input) input.value = `${CrisisAuth.currentUser.displayName} (${roleUpper})`;
   }
+  const locInput = document.getElementById('locationInput');
+  if (locInput && state.userSectorName) {
+    locInput.value = state.userSectorName;
+  }
 }
 
   // Direct 2G SMS Button in Composer
@@ -1038,9 +1157,11 @@ function restoreComposerAuthor() {
   if (btnDispatchSms) {
     btnDispatchSms.addEventListener('click', () => {
       const author = document.getElementById('authorInput').value.trim() || 'Survivor';
-      const location = document.getElementById('locationInput').value.trim() || 'Sector';
+      const location = document.getElementById('locationInput').value.trim() || (state.userSectorName || 'Sector');
       const category = document.getElementById('categorySelect').value || 'aid';
       const text = document.getElementById('textInput').value.trim();
+      const radiusElem = document.getElementById('broadcastRadiusSelect');
+      const radiusKm = radiusElem ? parseFloat(radiusElem.value) : 15;
 
       if (!text) {
         alert('Please enter report details first.');
@@ -1054,7 +1175,8 @@ function restoreComposerAuthor() {
         location,
         category,
         text,
-        coordinates: state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : null,
+        radiusKm: radiusKm,
+        coordinates: state.userLocation ? { lat: state.userLocation.lat, lon: state.userLocation.lon } : null,
         timestamp: new Date().toISOString()
       };
 
@@ -1067,9 +1189,11 @@ function restoreComposerAuthor() {
   if (btnGenerateQr) {
     btnGenerateQr.addEventListener('click', () => {
       const author = document.getElementById('authorInput').value.trim() || 'Survivor';
-      const location = document.getElementById('locationInput').value.trim() || 'Local Area';
+      const location = document.getElementById('locationInput').value.trim() || (state.userSectorName || 'Local Sector');
       const category = document.getElementById('categorySelect').value || 'aid';
       const text = document.getElementById('textInput').value.trim();
+      const radiusElem = document.getElementById('broadcastRadiusSelect');
+      const radiusKm = radiusElem ? parseFloat(radiusElem.value) : 15;
 
       if (!text) {
         alert('Please enter report details first.');
@@ -1077,7 +1201,7 @@ function restoreComposerAuthor() {
         return;
       }
 
-      const coords = state.userLocation ? `${state.userLocation.lat.toFixed(5)},${state.userLocation.lon.toFixed(5)}` : null;
+      const coords = state.userLocation ? { lat: state.userLocation.lat, lon: state.userLocation.lon } : null;
       const post = {
         id: Date.now(),
         author,
@@ -1085,6 +1209,7 @@ function restoreComposerAuthor() {
         category,
         text,
         coordinates: coords,
+        radiusKm: radiusKm,
         source: 'mesh_qr',
         isPending: true,
         timestamp: new Date().toISOString()
@@ -1098,6 +1223,14 @@ function restoreComposerAuthor() {
 
       // Open QR for display immediately
       openQrRelayModal(post);
+    });
+  }
+
+  // Geofence Radius Filter Change Listener
+  const feedFilter = document.getElementById('feedRadiusFilter');
+  if (feedFilter) {
+    feedFilter.addEventListener('change', () => {
+      renderCommunityFeed();
     });
   }
 }
