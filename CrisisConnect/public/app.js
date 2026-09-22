@@ -102,11 +102,17 @@ async function updateNetworkStatus(forceProbe = false) {
     if (!state.userManuallySelectedMode) {
       setAdaptiveMode('offline', false);
     }
-  } else if (effectiveType.includes('2G') || effectiveType.includes('SLOW') || effectiveType.includes('3G')) {
+  } else if (effectiveType.includes('2G') || effectiveType.includes('SLOW')) {
     if (dot) dot.className = 'pulse-dot slow';
     if (text) text.textContent = `DEGRADED NETWORK (${effectiveType}) - 2G SURVIVOR MODE`;
     if (!state.userManuallySelectedMode) {
       setAdaptiveMode('low', false);
+    }
+  } else if (effectiveType.includes('3G')) {
+    if (dot) dot.className = 'pulse-dot medium';
+    if (text) text.textContent = `ONLINE (3G MEDIUM) - RESILIENT GRID`;
+    if (!state.userManuallySelectedMode) {
+      setAdaptiveMode('high', false);
     }
   } else {
     if (dot) dot.className = 'pulse-dot';
@@ -540,9 +546,9 @@ function applyTheme(theme = 'light', showToastNotification = false) {
   if (textSpan) textSpan.textContent = 'OFFICE';
   if (toggleBtn) toggleBtn.setAttribute('title', 'Corporate Office Theme');
 
-  // Update map vector tile styling to clean CartoDB Light
+  // Update map vector tile styling to clean standard OpenStreetMap (zero watermark, 100% free, no API key required)
   if (state.map && state.vectorLayer) {
-    state.vectorLayer.setUrl('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
+    state.vectorLayer.setUrl('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
   }
 
   if (showToastNotification) {
@@ -584,15 +590,13 @@ function initMap() {
     attribution: 'Esri Satellite'
   });
 
-  // 2. OpenStreetMap / Vector Tile Layer (for 2G Low-Bandwidth Mode tailored to Dark/Light)
-  const currentTheme = getCurrentTheme();
-  const vectorTileUrl = currentTheme === 'light'
-    ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  // 2. OpenStreetMap Layer (clean, 100% free, zero API key required, zero watermark)
+  const vectorTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   state.vectorLayer = L.tileLayer(vectorTileUrl, {
-    maxZoom: 18,
-    errorTileUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" style="background:%23111;"><text x="50%" y="50%" fill="%2338bdf8" font-size="12" text-anchor="middle" font-family="sans-serif">2G GRID VECTOR</text></svg>'
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+    errorTileUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
   });
 
   // Apply default layer based on current adaptive mode
@@ -787,7 +791,8 @@ function renderMapShelterMarkers() {
     });
 
     const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${sh.lat},${sh.lon}`;
-    const isGoodNet = state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline' && state.adaptiveMode !== 'low';
+    // Medium to High internet: online and not offline blackout mode
+    const isGoodNet = Boolean(state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline');
 
     const marker = L.marker([sh.lat, sh.lon], { icon: markerIcon })
       .addTo(state.map)
@@ -979,8 +984,8 @@ function renderSheltersList() {
 
   document.getElementById('sheltersBadge').textContent = state.shelters.length;
   const isHigh = state.adaptiveMode === 'high';
-  // Check live network quality: online and not in low/offline mode
-  const isGoodNet = state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline' && state.adaptiveMode !== 'low';
+  // Check live network: Medium to High internet calls hospital; Offline sends SOS message
+  const isGoodNet = Boolean(state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline');
 
   // Calculate distance for all shelters and sort nearest first
   const sortedShelters = [...state.shelters].map(sh => {
@@ -1057,8 +1062,8 @@ window.handleShelterEmergencyContact = function(shelterId) {
   const rawPhone = sh.contact || '108';
   const cleanPhone = rawPhone.replace(/[^\d+]/g, '');
 
-  // Check live network quality: online and not in low/offline mode
-  const isGoodNet = state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline' && state.adaptiveMode !== 'low';
+  // Check live network quality: Medium to High calls hospital; Offline sends SOS
+  const isGoodNet = Boolean(state.isOnline && navigator.onLine && state.adaptiveMode !== 'offline');
 
   if (isGoodNet) {
     // 1. Medium to High Internet: Call Hospital Directly
