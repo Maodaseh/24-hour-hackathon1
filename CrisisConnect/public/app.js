@@ -378,17 +378,23 @@ function initGeolocation() {
         // Automatically resolve disaster sector name & auto-fill community input
         autoResolveSectorLocation(pos.coords.latitude, pos.coords.longitude);
 
-        // 1. Clear any old route line/routing and center map smoothly on user's real location
-        if (state.routingControl && state.map) {
-          state.map.removeControl(state.routingControl);
-          state.routingControl = null;
-        }
-        if (state.activePolyline && state.map) {
-          state.map.removeLayer(state.activePolyline);
-          state.activePolyline = null;
-        }
-        if (state.map) {
-          state.map.setView([state.userLocation.lat, state.userLocation.lon], 15);
+        // 1. If user is actively navigating to a shelter, DON'T clear the route or re-center
+        if (state.selectedTargetShelter && (state.routingControl || state.activePolyline)) {
+          // Just update the user marker position on the existing route — keep route visible
+          updateMapUserMarker();
+        } else {
+          // No active navigation — clear any stale routes and center on user
+          if (state.routingControl && state.map) {
+            state.map.removeControl(state.routingControl);
+            state.routingControl = null;
+          }
+          if (state.activePolyline && state.map) {
+            state.map.removeLayer(state.activePolyline);
+            state.activePolyline = null;
+          }
+          if (state.map) {
+            state.map.setView([state.userLocation.lat, state.userLocation.lon], 15);
+          }
         }
 
         updateMapUserMarker();
@@ -894,10 +900,55 @@ window.selectNavTarget = function(shelterId) {
       // Fallback if Routing Machine didn't load
       drawFallbackLine(found);
     }
+
+    // Show the Cancel Navigation button
+    showCancelNavButton();
   }
 
   // Switch to Map tab
   document.getElementById('tabMap').click();
+};
+
+// Show a floating "Cancel Navigation" button on the map
+function showCancelNavButton() {
+  let cancelBtn = document.getElementById('cancelNavBtn');
+  if (!cancelBtn) {
+    cancelBtn = document.createElement('button');
+    cancelBtn.id = 'cancelNavBtn';
+    cancelBtn.className = 'cancel-nav-btn';
+    cancelBtn.innerHTML = '✕ Cancel Navigation';
+    cancelBtn.onclick = function() { window.cancelNavigation(); };
+    const mapWrapper = document.querySelector('.map-wrapper');
+    if (mapWrapper) mapWrapper.appendChild(cancelBtn);
+  }
+  cancelBtn.style.display = 'flex';
+}
+
+// Global function to cancel active navigation
+window.cancelNavigation = function() {
+  // Remove routing control
+  if (state.routingControl && state.map) {
+    state.map.removeControl(state.routingControl);
+    state.routingControl = null;
+  }
+  // Remove fallback polyline
+  if (state.activePolyline && state.map) {
+    state.map.removeLayer(state.activePolyline);
+    state.activePolyline = null;
+  }
+  // Clear selected target
+  state.selectedTargetShelter = null;
+
+  // Hide the cancel button
+  const cancelBtn = document.getElementById('cancelNavBtn');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+
+  // Re-center map on user
+  if (state.map) {
+    state.map.setView([state.userLocation.lat, state.userLocation.lon], 15);
+  }
+
+  showAdaptiveToast('🗺️ Navigation Cancelled — Map Recentered', 'high');
 };
 
 // Fallback straight-line drawing when OSRM routing is unavailable

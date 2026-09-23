@@ -2265,6 +2265,43 @@ body:not(.mode-survivor-2g) .high-mode-rich {
   }
 }
 
+/* Floating Cancel Navigation Button */
+.cancel-nav-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-pill);
+  padding: 10px 24px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.45);
+  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+}
+
+.cancel-nav-btn:hover {
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 6px 28px rgba(220, 38, 38, 0.6);
+}
+
+@media (max-width: 480px) {
+  .cancel-nav-btn {
+    font-size: 0.78rem;
+    padding: 8px 18px;
+    bottom: 10px;
+  }
+}
+
 /* Ensure Leaflet attribution doesn't interfere */
 .leaflet-control-attribution {
   font-size: 0.65rem !important;
