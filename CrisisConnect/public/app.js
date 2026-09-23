@@ -18,6 +18,7 @@ const state = {
   userMarker: null,
   shelterMarkers: [],
   activePolyline: null,
+  routingControl: null,
   torchActive: false,
   mediaStreamTrack: null,
   adaptiveMode: 'auto',
@@ -377,7 +378,11 @@ function initGeolocation() {
         // Automatically resolve disaster sector name & auto-fill community input
         autoResolveSectorLocation(pos.coords.latitude, pos.coords.longitude);
 
-        // 1. Clear any old route line and center map smoothly on user's real location
+        // 1. Clear any old route line/routing and center map smoothly on user's real location
+        if (state.routingControl && state.map) {
+          state.map.removeControl(state.routingControl);
+          state.routingControl = null;
+        }
         if (state.activePolyline && state.map) {
           state.map.removeLayer(state.activePolyline);
           state.activePolyline = null;
@@ -802,7 +807,7 @@ function renderMapShelterMarkers() {
   });
 }
 
-// Global function to route to target
+// Global function to route to target with GPS-style directions
 window.selectNavTarget = function(shelterId) {
   const found = state.shelters.find(s => s.id === shelterId);
   if (!found) return;
@@ -811,24 +816,106 @@ window.selectNavTarget = function(shelterId) {
   updateNearestShelterRadar();
 
   if (state.map && typeof L !== 'undefined') {
-    // Draw directional line on map
+    // Remove any existing routing control
+    if (state.routingControl) {
+      state.map.removeControl(state.routingControl);
+      state.routingControl = null;
+    }
+    // Remove any existing straight polyline (legacy)
     if (state.activePolyline) {
       state.map.removeLayer(state.activePolyline);
+      state.activePolyline = null;
     }
-    state.activePolyline = L.polyline([
-      [state.userLocation.lat, state.userLocation.lon],
-      [found.lat, found.lon]
-    ], { color: '#38bdf8', weight: 4, dashArray: '8, 8' }).addTo(state.map);
 
-    state.map.fitBounds([
-      [state.userLocation.lat, state.userLocation.lon],
-      [found.lat, found.lon]
-    ], { padding: [60, 60], maxZoom: 16 });
+    // Check if Leaflet Routing Machine is available
+    if (L.Routing && L.Routing.control) {
+      // Use GPS-style route map with OSRM (free, no API key)
+      state.routingControl = L.Routing.control({
+        waypoints: [
+          L.latLng(state.userLocation.lat, state.userLocation.lon),
+          L.latLng(found.lat, found.lon)
+        ],
+        router: L.Routing.osrmv1({
+          serviceUrl: 'https://router.project-osrm.org/route/v1',
+          profile: 'driving'
+        }),
+        lineOptions: {
+          styles: [
+            { color: '#2563eb', opacity: 0.85, weight: 6 },
+            { color: '#60a5fa', opacity: 0.5, weight: 10 }
+          ],
+          extendToWaypoints: true,
+          missingRouteTolerance: 5
+        },
+        createMarker: function(i, waypoint) {
+          const icons = [
+            L.divIcon({
+              className: 'route-start-marker',
+              html: '<div style="width:16px;height:16px;background:#2563eb;border:3px solid #fff;border-radius:50%;box-shadow:0 0 12px #2563eb;"></div>',
+              iconSize: [16, 16],
+              iconAnchor: [8, 8]
+            }),
+            L.divIcon({
+              className: 'route-end-marker',
+              html: '<div style="width:22px;height:22px;background:#dc2626;border:3px solid #fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 0 14px rgba(220,38,38,0.7);">🏥</div>',
+              iconSize: [22, 22],
+              iconAnchor: [11, 11]
+            })
+          ];
+          return L.marker(waypoint.latLng, { icon: icons[i] });
+        },
+        addWaypoints: false,
+        draggableWaypoints: false,
+        fitSelectedRoutes: true,
+        showAlternatives: false,
+        routeWhileDragging: false,
+        show: true,
+        collapsible: true,
+        containerClassName: 'route-instructions-panel'
+      }).addTo(state.map);
+
+      // Handle routing errors — fallback to straight line
+      state.routingControl.on('routingerror', function() {
+        console.warn('[Map] Routing failed, falling back to straight line');
+        if (state.routingControl) {
+          state.map.removeControl(state.routingControl);
+          state.routingControl = null;
+        }
+        drawFallbackLine(found);
+      });
+
+      // Fit bounds after route is found
+      state.routingControl.on('routesfound', function(e) {
+        const route = e.routes[0];
+        const bounds = L.latLngBounds(route.coordinates);
+        state.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      });
+    } else {
+      // Fallback if Routing Machine didn't load
+      drawFallbackLine(found);
+    }
   }
 
   // Switch to Map tab
   document.getElementById('tabMap').click();
 };
+
+// Fallback straight-line drawing when OSRM routing is unavailable
+function drawFallbackLine(shelter) {
+  if (!state.map || typeof L === 'undefined') return;
+  if (state.activePolyline) {
+    state.map.removeLayer(state.activePolyline);
+  }
+  state.activePolyline = L.polyline([
+    [state.userLocation.lat, state.userLocation.lon],
+    [shelter.lat, shelter.lon]
+  ], { color: '#2563eb', weight: 4, dashArray: '10, 6', opacity: 0.75 }).addTo(state.map);
+
+  state.map.fitBounds([
+    [state.userLocation.lat, state.userLocation.lon],
+    [shelter.lat, shelter.lon]
+  ], { padding: [60, 60], maxZoom: 16 });
+}
 
 // =========================================================
 // 5. FETCH DATA (ALERTS, SHELTERS, COMMUNITY)

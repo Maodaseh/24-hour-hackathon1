@@ -662,14 +662,17 @@ body:not(.mode-survivor-2g) .high-mode-rich {
   display: grid;
   grid-template-columns: 1fr 340px;
   gap: 18px;
-  height: calc(100vh - 210px);
-  min-height: 480px;
+  height: calc(100vh - 280px);
+  min-height: 420px;
+  max-height: 800px;
 }
 
 @media (max-width: 880px) {
   .map-view-container {
     grid-template-columns: 1fr;
     height: auto;
+    min-height: unset;
+    max-height: unset;
   }
 }
 
@@ -690,6 +693,19 @@ body:not(.mode-survivor-2g) .high-mode-rich {
   width: 100%;
   min-height: 380px;
   background: var(--bg-card);
+}
+
+@media (max-width: 880px) {
+  #map {
+    min-height: 55vh;
+    max-height: 70vh;
+  }
+}
+
+@media (max-width: 480px) {
+  #map {
+    min-height: 50vh;
+  }
 }
 
 /* 2G Vector Compass/Radar Overlay (Aerospace HUD Capsule) */
@@ -2135,4 +2151,123 @@ body:not(.mode-survivor-2g) .high-mode-rich {
     width: 100%;
     justify-content: flex-start;
   }
+}
+
+/* =========================================================
+   Leaflet Routing Machine — GPS Direction Panel
+   ========================================================= */
+.leaflet-routing-container {
+  background: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.82rem !important;
+  color: var(--text-primary) !important;
+  max-height: 260px !important;
+  overflow-y: auto !important;
+  padding: 8px !important;
+  width: 280px !important;
+  z-index: 800 !important;
+}
+
+.leaflet-routing-container h2,
+.leaflet-routing-container h3 {
+  font-family: var(--font-sans) !important;
+  font-weight: 800 !important;
+  font-size: 0.88rem !important;
+  color: var(--text-primary) !important;
+  margin: 0 0 6px !important;
+  padding: 4px 0 !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.leaflet-routing-alt {
+  padding: 4px 8px !important;
+}
+
+.leaflet-routing-alt table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+.leaflet-routing-alt td {
+  padding: 5px 6px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  font-size: 0.78rem !important;
+  color: var(--text-secondary) !important;
+  vertical-align: top !important;
+}
+
+.leaflet-routing-alt td:first-child {
+  font-weight: 700 !important;
+  color: var(--color-accent) !important;
+  white-space: nowrap !important;
+  width: 60px !important;
+}
+
+.leaflet-routing-alt tr:hover td {
+  background: var(--bg-card-hover) !important;
+}
+
+.leaflet-routing-container .leaflet-routing-collapse-btn {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  color: var(--text-accent) !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 700 !important;
+  font-size: 0.76rem !important;
+  padding: 4px 10px !important;
+  cursor: pointer !important;
+}
+
+/* Route summary bar */
+.leaflet-routing-alt h2,
+.leaflet-routing-alt h3 {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 0.82rem !important;
+  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+}
+
+/* Mobile: Compact routing panel */
+@media (max-width: 880px) {
+  .leaflet-routing-container {
+    width: 220px !important;
+    max-height: 180px !important;
+    font-size: 0.75rem !important;
+    bottom: 10px !important;
+    right: 10px !important;
+  }
+
+  .leaflet-routing-alt td {
+    font-size: 0.72rem !important;
+    padding: 3px 4px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .leaflet-routing-container {
+    width: 180px !important;
+    max-height: 140px !important;
+    font-size: 0.7rem !important;
+  }
+
+  .leaflet-routing-container h2,
+  .leaflet-routing-container h3 {
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Ensure Leaflet attribution doesn't interfere */
+.leaflet-control-attribution {
+  font-size: 0.65rem !important;
+  background: rgba(255,255,255,0.85) !important;
+  padding: 2px 6px !important;
 }
